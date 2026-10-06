@@ -32,7 +32,9 @@ beforeEach(async () => {
   localStorage.setItem('gym_owner', USER.id)
   api.mockReset(); toast.mockReset()
   _resetMediaOwed()
-  media = createMediaStore(memoryBackend())
+  // The store's clock runs a millisecond behind: a sign-out keeps whatever was put at or after
+  // the millisecond it captured, and the mocked api often answers within that millisecond.
+  media = createMediaStore(memoryBackend(), { now: () => Date.now() - 1 })
   _setMediaStore(media)
   useStore.setState({ S: clone(DEF), user: null, ready: false, sync: { ...fresh }, config: null })
 })
@@ -88,7 +90,6 @@ describe('owed photos and videos', () => {
 
   it('a sign-out takes the account\'s files even when its copy no longer refers to any (a photo removed a moment ago)', async () => {
     await media.put(A, new Blob(['abc']), { mime: 'image/webp', pending: false })
-    await new Promise(r => setTimeout(r, 5))   // put before the sign-out, not during it
     useStore.setState({ S: { ...clone(DEF), _ts: 100 }, user: USER, ready: true, sync: { ...fresh } })
     localStorage.setItem('gym_sync', JSON.stringify({ rev: 1, ts: 100 }))
     api.mockImplementation(async (path, o) => (o?.method === 'PUT' ? { ok: true, rev: 2 } : { ok: true }))
