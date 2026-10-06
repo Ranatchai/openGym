@@ -2,29 +2,44 @@
 set -eu
 cd "$(dirname "$0")/../.."
 fixtures=ios-native/OpenGymCore/Tests/OpenGymCoreTests/Fixtures
-probe=$fixtures/untracked-probe.json
-drifted=$fixtures/conformance/rep-range.json
+resources=ios-native/OpenGymApp/Resources
 export CHECK_CORPUS_SKIP_GENERATE=1
 
 sh ios-native/tools/check-corpus.sh >/dev/null
-trap 'rm -f "$probe"; git checkout -- "$drifted"' EXIT
+probe=
+drifted=
+trap 'rm -f "$probe"; [ -z "$drifted" ] || git checkout -- "$drifted"' EXIT
 
-echo '{}' > "$probe"
-if sh ios-native/tools/check-corpus.sh >/dev/null 2>&1; then
-  echo "check-corpus.sh passed with an untracked fixture: $probe"
-  exit 1
-fi
-rm "$probe"
+expect_untracked_fails() {
+  probe=$1
+  echo '{}' > "$probe"
+  if sh ios-native/tools/check-corpus.sh >/dev/null 2>&1; then
+    echo "check-corpus.sh passed with an untracked file: $probe"
+    exit 1
+  fi
+  rm "$probe"
+}
 
-echo >> "$drifted"
-if out=$(sh ios-native/tools/check-corpus.sh 2>&1); then
-  echo "check-corpus.sh passed with a drifted fixture: $drifted"
-  exit 1
-fi
-for expected in "$drifted" 'node ios-native/tools/gen-fixtures.mjs' 'swift test' 'git commit'; do
-  case "$out" in
-    *"$expected"*) ;;
-    *) printf 'check-corpus.sh failure does not say "%s":\n%s\n' "$expected" "$out"; exit 1 ;;
-  esac
-done
-echo "check-corpus.sh: clean tree passes; an untracked or drifted fixture fails and says how to regenerate"
+expect_drift_fails() {
+  drifted=$1
+  shift
+  echo >> "$drifted"
+  if out=$(sh ios-native/tools/check-corpus.sh 2>&1); then
+    echo "check-corpus.sh passed with a drifted file: $drifted"
+    exit 1
+  fi
+  git checkout -- "$drifted"
+  for expected in "$drifted" "$@" 'swift test' 'git commit'; do
+    case "$out" in
+      *"$expected"*) ;;
+      *) printf 'check-corpus.sh failure does not say "%s":\n%s\n' "$expected" "$out"; exit 1 ;;
+    esac
+  done
+}
+
+expect_untracked_fails "$fixtures/untracked-probe.json"
+expect_untracked_fails "$resources/untracked-probe.json"
+expect_drift_fails "$fixtures/conformance/rep-range.json" 'node ios-native/tools/gen-fixtures.mjs'
+expect_drift_fails "$resources/exercises.json" 'node ios-native/tools/export-exercises.mjs'
+expect_drift_fails "$resources/Localizable.xcstrings" 'node ios-native/tools/convert-locales.mjs'
+echo "check-corpus.sh: clean tree passes; an untracked or drifted fixture or app resource fails and says how to regenerate"
