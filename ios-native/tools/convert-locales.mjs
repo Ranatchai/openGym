@@ -3,7 +3,8 @@
 //
 // Keys stay the English source strings. Every value, including the English one, is a format
 // string: a literal % becomes %%, and {n} becomes %(n+1)$@, so the app always runs
-// String(format:) and gets what t(key, ...args) gives on the web.
+// String(format:) and gets what t(key, ...args) gives on the web. A missing or empty
+// translation is left out, so the key falls back to English as `dict[s] || s` does.
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { LANGS, baseLang, derivePack } from '../../frontend/src/lib/i18n-core.js'
@@ -31,8 +32,7 @@ for (const key of keys) {
   if (source !== key) localizations[SOURCE] = unit(source)
   for (const lang of langs) {
     const value = packs[lang][key]
-    if (typeof value !== 'string') throw new Error(`${lang} has no translation for ${JSON.stringify(key)}`)
-    localizations[lang] = unit(toFormat(value))
+    if (value) localizations[lang] = unit(toFormat(value))
   }
   strings[key] = { extractionState: 'manual', localizations: sortKeys(localizations) }
 }
