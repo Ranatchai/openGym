@@ -4,6 +4,10 @@ public enum WeightUnit: String, Sendable, CaseIterable {
 
 public struct StateDocumentError: Error, Equatable, CustomStringConvertible {
     public let description: String
+
+    public init(description: String) {
+        self.description = description
+    }
 }
 
 /// The persisted openGym state `S` as the web app wrote it. Reads and writes go through the

@@ -92,7 +92,7 @@ public struct JSONObject: Equatable, Sendable {
 
     /// The canonical array index a key spells, if any: the decimal form of an integer in
     /// `0 ..< 2^32 - 1` with no sign, no leading zero and no other characters.
-    static func arrayIndex(_ key: String) -> UInt32? {
+    public static func arrayIndex(_ key: String) -> UInt32? {
         var utf8 = key.utf8.makeIterator()
         guard let first = utf8.next(), first >= 0x30, first <= 0x39 else { return nil }
         if first == 0x30 { return utf8.next() == nil ? 0 : nil }

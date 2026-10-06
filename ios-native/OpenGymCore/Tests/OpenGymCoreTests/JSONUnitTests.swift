@@ -1,5 +1,5 @@
 import Testing
-@testable import OpenGymCore
+import OpenGymCore
 
 private func roundTrip(_ text: String) throws -> String {
     JSONSerializer.string(try JSONParser.parse(text))
