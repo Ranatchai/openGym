@@ -1,5 +1,6 @@
 process.env.TZ = 'UTC'
 
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -242,7 +243,7 @@ addCase('deep', deep)
 
 seed(2)
 const syncMergeInputs = await recordSyncMergeArgs()
-syncMergeInputs.forEach((text, i) => addCase(`sync-merge-${String(i + 1).padStart(3, '0')}`, text))
+for (const text of syncMergeInputs) addCase(`sync-merge-${createHash('sha256').update(text).digest('hex').slice(0, 12)}`, text)
 
 seed(3)
 const randomInputs = Array.from({ length: 500 }, genDoc)
