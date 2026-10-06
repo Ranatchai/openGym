@@ -69,6 +69,16 @@ import OpenGymCore
         #expect(String(decoding: document.serialized(), as: UTF8.self) == #"{"routines":[{"id":"r1"}],"x":1}"#)
     }
 
+    @Test(arguments: ["{}", #"{"unit":"stone","restSec":"90","routines":{},"workouts":null}"#])
+    func readsAbsentOrMistypedFieldsAsAbsent(text: String) throws {
+        let document = try StateDocument(parsing: Array(text.utf8))
+        #expect(document.unit == nil)
+        #expect(document.restSec == nil)
+        #expect(document.routines.isEmpty)
+        #expect(document.workouts.isEmpty)
+        #expect(String(decoding: document.serialized(), as: UTF8.self) == text)
+    }
+
     @Test func rejectsANonObjectRoot() {
         #expect(throws: StateDocumentError(description: "state root is not an object")) {
             try StateDocument(parsing: Array("[1]".utf8))

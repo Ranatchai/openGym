@@ -199,6 +199,16 @@ private func roundTrip(_ text: String) throws -> String {
         }
     }
 
+    @Test(arguments: [
+        ([0x22, 0x5C, 0x6E, 0x01, 0x22], 3, "control character in string"),
+        ([0x22, 0x5C, 0x74, 0x1F, 0x5C, 0x74, 0x22], 3, "control character in string"),
+        ([0x22, 0x5C, 0x6E, 0xED, 0xA0, 0x80, 0x22], 3, "invalid UTF-8"),
+        ([0x22, 0x5C, 0x75, 0x30, 0x30, 0x65, 0x39, 0xFF, 0x5C, 0x6E, 0x22], 7, "invalid UTF-8"),
+    ])
+    func rejectsBadBytesAfterAnEscape(bytes: [UInt8], offset: Int, message: String) {
+        #expect(throws: JSONParseError(offset: offset, message: message)) { try JSONParser.parse(bytes) }
+    }
+
     @Test func duplicateKeysKeepLastValueAtFirstPosition() throws {
         #expect(try roundTrip(#"{"a":1,"b":2,"a":3,"1":4,"c":5,"1":6}"#) == #"{"1":6,"a":3,"b":2,"c":5}"#)
     }

@@ -289,6 +289,7 @@ const malformed = {
   'hex-number': '[0x1F]',
   'plus-sign': '[+1]',
   'bare-control-char-in-string': '["a\u0001b"]',
+  'bare-control-char-after-escape': '["\\n\u0001"]',
   'invalid-escape': String.raw`["\x41"]`,
   'trailing-garbage': '{} x',
   'unquoted-key': '{a:1}',
