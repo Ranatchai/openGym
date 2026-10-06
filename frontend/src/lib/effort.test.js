@@ -217,7 +217,7 @@ describe('effortColor', () => {
     expect(effortColor(1)).toBe('var(--orange)')
     expect(effortColor(2)).toBe('var(--yellow)')
     expect(effortColor(3)).toBe('var(--green)')
-    expect(effortColor(4)).toBe('var(--acc-2)')
+    expect(effortColor(4)).toBe('var(--teal)')
   })
 
   it('colours a typed in-between value by the band it falls in, never leaving it blank', () => {

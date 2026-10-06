@@ -1658,6 +1658,7 @@ export default {
   'Blue': '파랑',
   'Orange': '주황',
   'Purple': '보라',
+  'Periwinkle': '페리윙클',
   'Pink': '분홍',
   'Red': '빨강',
   'Teal': '청록',

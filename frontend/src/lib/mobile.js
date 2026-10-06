@@ -31,6 +31,21 @@ export async function isAndroid() {
   }
 }
 
+// The iOS status bar and keyboard in the app's theme, not the phone's (ios/App/App/
+// AppearancePlugin.swift): a phone in dark mode otherwise draws white status-bar text over the
+// pale Aura Matrix desk. `mode` is the theme setting itself — 'light', 'dark' or 'system', which
+// hands both back to the phone. iOS only; best-effort, never throws.
+let appearance = null
+export async function setNativeAppearance(mode) {
+  if (!MOBILE) return
+  try {
+    const { Capacitor, registerPlugin } = await import('@capacitor/core')
+    if (Capacitor.getPlatform() !== 'ios') return
+    appearance = appearance || registerPlugin('Appearance')   // registered once: Capacitor warns on a second
+    await appearance.set({ mode })
+  } catch (e) { /* an older shell without the plugin keeps the system's appearance */ }
+}
+
 const FILE = 'opengym-state.json'
 
 export async function nativeLoad() {

@@ -124,6 +124,19 @@ language-model assistance. They are not copied from a separate Portuguese
 dataset. Their review status and translation policy are documented alongside
 the source files.
 
+## Typefaces
+
+The app's look (Aura Matrix, `frontend/src/aura.css`) sets its text in three typefaces, shipped
+inside the app as WOFF2 files in `frontend/src/fonts/` so the iOS and Android apps have them
+offline. All three are licensed under the **SIL Open Font License 1.1**, which allows bundling
+them with software of any license; each licence text ships with the app in `frontend/public/licenses/`.
+
+| Typeface | Copyright | Licence |
+|---|---|---|
+| Geist | © 2024 The Geist Project Authors | [OFL-geist.txt](frontend/public/licenses/OFL-geist.txt) |
+| Geist Mono | © 2024 The Geist Project Authors | [OFL-geistmono.txt](frontend/public/licenses/OFL-geistmono.txt) |
+| Archivo | © 2020 The Archivo Project Authors | [OFL-archivo.txt](frontend/public/licenses/OFL-archivo.txt) |
+
 ## Gym check-in QR codes
 
 The gym check-in feature (a saved membership code shown as a QR code on the phone, added by

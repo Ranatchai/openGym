@@ -48,8 +48,8 @@ public final class RestAlert {
     private static String labMinus = "\u2212 15s";
     private static String labPlus = "+ 15s";
     private static String labSkip = "Skip";
-    private static int lastAccent = 0xFF30D158;
-    private static int lastInk = 0xFF000000;
+    private static int lastAccent = 0xFF965ADE;   // orchid, the default Aura Matrix accent (lib/format.js)
+    private static int lastInk = 0xFF3F265D;
     static final int COUNTDOWN_ID = 41;
     static final int NOTIFICATION_ID = 42;
     static final String COUNTDOWN_CHANNEL_ID = "rest-countdown";

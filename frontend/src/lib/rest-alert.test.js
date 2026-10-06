@@ -21,10 +21,16 @@ describe('buildRestAlert', () => {
     })
   })
 
-  it('paints the notification with the chosen accent, not the default green', () => {
-    const alert = buildRestAlert({ at: now + 1000, accent: 'red', now })
-    expect(alert.accent).toBe((0xff000000 | 0xff453a) >>> 0)
-    expect(alert.ink).toBe((0xff000000 | 0xffffff) >>> 0)
+  it('paints the notification with the chosen accent, not the default orchid', () => {
+    const alert = buildRestAlert({ at: now + 1000, accent: 'magenta', now })
+    expect(alert.accent).toBe((0xff000000 | 0xe25aa0) >>> 0)
+    expect(alert.ink).toBe((0xff000000 | 0x5f2643) >>> 0)
+  })
+
+  it('paints an accent saved before Aura Matrix in its nearest candy hue', () => {
+    expect(buildRestAlert({ at: now + 1000, accent: 'red', now }).accent).toBe((0xff000000 | 0xf5966e) >>> 0)   // coral
+    expect(buildRestAlert({ at: now + 1000, accent: 'lime', now }).accent).toBe((0xff000000 | 0x965ade) >>> 0)  // orchid
+    expect(buildRestAlert({ at: now + 1000, accent: 'nonsense', now }).accent).toBe((0xff000000 | 0x965ade) >>> 0)
   })
 
   it('still schedules when sound is off', () => {

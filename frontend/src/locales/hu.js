@@ -1661,6 +1661,7 @@ export default {
   'Blue': 'Kék',
   'Orange': 'Narancs',
   'Purple': 'Lila',
+  'Periwinkle': 'Levendulakék',
   'Pink': 'Rózsaszín',
   'Red': 'Piros',
   'Teal': 'Türkiz',

@@ -1669,6 +1669,7 @@ export default {
   'Blue': 'น้ำเงิน',
   'Orange': 'ส้ม',
   'Purple': 'ม่วง',
+  'Periwinkle': 'ม่วงอมฟ้า',
   'Pink': 'ชมพู',
   'Red': 'แดง',
   'Teal': 'เขียวน้ำทะเล',

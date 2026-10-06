@@ -12,14 +12,22 @@
     var l = s.lang || ((navigator.language || '').slice(0, 2) === 'ar' ? 'ar' : 'en');
     document.documentElement.lang = l;
     document.documentElement.dir = l === 'ar' ? 'rtl' : 'ltr';
+    // The theme and accent too, so a dark profile never flashes the light Aura desk. The app
+    // re-applies both on start (App.jsx applyPrefs), which also maps a pre-Aura accent key.
+    var t = s.theme === 'light' || s.theme === 'dark' ? s.theme
+      : s.theme ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : 'light';
+    document.documentElement.dataset.theme = t;
+    if (s.accent) document.documentElement.dataset.accent = s.accent;
   } catch (e) {}
 </script>
 <title>openGym</title>
 <meta name="description" content="Personal gym & body weight tracker">
-<meta name="theme-color" content="#0c0e12">
+<meta name="theme-color" content="#efeaf4">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- "default", not black-translucent: iOS reads this once, at launch, and black-translucent
+     draws white status-bar text, which the pale Aura Matrix desk cannot carry. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="openGym">
 <!-- use-credentials: browsers fetch the manifest without cookies, even same-origin; behind an auth
      proxy (Authelia, Cloudflare Access, Teleport…) that fetch is a login redirect and the Home Screen

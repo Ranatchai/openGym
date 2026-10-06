@@ -120,10 +120,16 @@ export const weekKey = (iso, ws = MONDAY) => isoOf(startOfWeek(iso, ws))
 export const localTZ = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { return 'UTC' } }
 
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
-// What each accent is called, for a screen reader (Settings' swatches carry no text).
-export const ACCENT_NAMES = { lime: 'Green', sky: 'Blue', orange: 'Orange', violet: 'Purple', pink: 'Pink', red: 'Red', teal: 'Teal', gold: 'Yellow' }
-export const ACCENTS = { lime: '#30d158', sky: '#0a84ff', orange: '#ff9f0a', violet: '#bf5af2', pink: '#ff375f', red: '#ff453a', teal: '#40c8e0', gold: '#ffd60a' }
-// Text drawn on top of that swatch. Matches the --on-acc values in index.css.
-export const ACCENT_INK = { lime: '#000000', sky: '#ffffff', orange: '#000000', violet: '#ffffff', pink: '#ffffff', red: '#ffffff', teal: '#000000', gold: '#000000' }
+// The accents are Aura Matrix's five candy hues (aura.css). What each is called, for a screen
+// reader (Settings' swatches carry no text).
+export const ACCENT_NAMES = { orchid: 'Purple', magenta: 'Pink', periwinkle: 'Periwinkle', sky: 'Blue', coral: 'Orange' }
+export const ACCENTS = { orchid: '#965ade', magenta: '#e25aa0', periwinkle: '#686ee6', sky: '#40a8e8', coral: '#f5966e' }
+// Text drawn on top of that hue: its deep tone, as the bold frost in aura.css draws it.
+export const ACCENT_INK = { orchid: '#3f265d', magenta: '#5f2643', periwinkle: '#2c2e61', sky: '#1b4761', coral: '#673f2e' }
+export const DEFAULT_ACCENT = 'orchid'
+// An account synced before Aura Matrix holds one of the eight old keys; each lands on the
+// nearest candy hue, so nobody's choice turns into the default.
+const LEGACY_ACCENTS = { lime: 'orchid', violet: 'orchid', pink: 'magenta', red: 'coral', orange: 'coral', gold: 'coral', teal: 'sky' }
+export const accentKey = k => (ACCENTS[k] ? k : LEGACY_ACCENTS[k] || DEFAULT_ACCENT)
 // Android color int, opaque. JS bitwise ops are signed, so the high bit is cleared back to unsigned.
 export const argb = hex => (0xff000000 | parseInt(hex.slice(1), 16)) >>> 0

@@ -83,7 +83,7 @@ export default function Home() {
           row keeps working, so a second session in one day is a tap away, just not urged. */}
       <div className="today-row" {...tappable(onToday)}>
         <div className="row" style={{ gap: 9, minWidth: 0 }}>
-          <span className="lrow-i" style={{ background: S.active ? 'var(--orange)' : doneToday ? 'var(--surface-3)' : routine ? 'var(--acc)' : 'var(--surface-3)' }}>
+          <span className="lrow-i" style={{ '--tint': S.active ? 'var(--orange)' : doneToday ? 'var(--surface-3)' : routine ? 'var(--acc)' : 'var(--surface-3)' }}>
             <Icon name={S.active ? (editingSaved ? 'pencil' : 'timer') : doneToday ? 'checkCircle' : routine ? glyphOf(routine.emoji) : 'moon'}
               style={doneToday && !S.active ? { color: 'var(--green)' } : undefined} />
           </span>
@@ -119,7 +119,7 @@ export default function Home() {
       <div className="card tappable" style={{ cursor: 'pointer' }} {...tappable(() => nav('/checkin'))}>
         <div className="row between">
           <div className="row" style={{ gap: 9 }}>
-            <span className="lrow-i" style={{ background: 'var(--blue)' }}><Icon name="qr" /></span>
+            <span className="lrow-i" style={{ '--tint': 'var(--blue)' }}><Icon name="qr" /></span>
             <div>
               <div className="lbl2">{t('At the gym')}</div>
               <div className="ttl">{t('Check in')}</div>

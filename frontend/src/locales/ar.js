@@ -1711,6 +1711,7 @@ export default {
   'Blue': 'أزرق',
   'Orange': 'برتقالي',
   'Purple': 'بنفسجي',
+  'Periwinkle': 'أزرق بنفسجي',
   'Pink': 'وردي',
   'Red': 'أحمر',
   'Teal': 'أزرق مخضر',
