@@ -111,7 +111,6 @@ public enum JSONSerializer {
         out.append(digits[Int(unit & 0xF)])
     }
 
-    /// ECMAScript Number::toString. Non-finite values are `null`, as in `JSON.stringify`.
     static func writeNumber(_ value: Double, into out: inout [UInt8]) {
         guard value.isFinite else {
             out.append(contentsOf: "null".utf8)
@@ -174,12 +173,6 @@ public enum JSONSerializer {
         }
     }
 
-    /// The shortest round-trip decimal digits of a positive finite double, without leading or
-    /// trailing zeros, and the position of the decimal point relative to the first digit:
-    /// value = 0.d1d2…dk × 10^pointPosition.
-    ///
-    /// Swift's `description` already picks the shortest round-trip digits; this only re-reads
-    /// them out of Swift's own layout.
     static func shortestDigits(_ value: Double) -> (digits: [UInt8], pointPosition: Int) {
         var digits: [UInt8] = []
         var integerDigits = 0

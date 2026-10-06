@@ -218,7 +218,6 @@ private struct Parser {
         mantissa = mantissa * 10 + UInt64(byte - 0x30)
     }
 
-    /// Parses the string whose opening quote is at `position`.
     mutating func parseString() throws -> JSONValue {
         position += 1
         let start = position
@@ -279,7 +278,7 @@ private struct Parser {
                         }
                     }
                     if (0xD800...0xDFFF).contains(unit) { hasLoneSurrogate = true }
-                    appendUTF8(scalar: unit, to: &scratch)
+                    appendWTF8(scalar: unit, to: &scratch)
                     runStart = position
                     continue
                 default: throw error("invalid escape")
@@ -300,7 +299,6 @@ private struct Parser {
         scratch.append(contentsOf: UnsafeBufferPointer(rebasing: buffer[from..<to]))
     }
 
-    /// Reads four hex digits at `position` and leaves `position` after them.
     mutating func hex4() throws -> UInt32 {
         guard position + 4 <= buffer.count else { throw error("unexpected end of input", at: buffer.count) }
         var value: UInt32 = 0
@@ -319,9 +317,7 @@ private struct Parser {
         return value
     }
 
-    /// Generalized UTF-8 that also encodes surrogate code points, so a lone surrogate
-    /// survives until the whole string is known to need `.utf16String`.
-    func appendUTF8(scalar: UInt32, to out: inout [UInt8]) {
+    func appendWTF8(scalar: UInt32, to out: inout [UInt8]) {
         switch scalar {
         case 0..<0x80:
             out.append(UInt8(scalar))
@@ -365,7 +361,6 @@ private struct Parser {
         return units
     }
 
-    /// The offset of the first byte that is not part of a well-formed UTF-8 sequence, if any.
     static func firstInvalidUTF8(_ buffer: UnsafeBufferPointer<UInt8>, from: Int, to: Int) -> Int? {
         var i = from
         while i < to {

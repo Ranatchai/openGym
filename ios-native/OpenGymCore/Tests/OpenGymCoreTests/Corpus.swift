@@ -2,7 +2,6 @@ import Foundation
 import Testing
 import OpenGymCore
 
-/// One input/expected pair of the generated corpus under `Fixtures/json-corpus`.
 struct CorpusPair: CustomTestStringConvertible, Sendable {
     let name: String
     let input: [UInt8]
@@ -11,7 +10,6 @@ struct CorpusPair: CustomTestStringConvertible, Sendable {
     var testDescription: String { name }
 }
 
-/// One `edits/<name>` case: a state, the typed edits to apply, and what JS wrote after them.
 struct EditCase: CustomTestStringConvertible, Sendable {
     let name: String
     let input: [UInt8]
