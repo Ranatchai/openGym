@@ -12,7 +12,7 @@ public struct JSONParseError: Error, Equatable, CustomStringConvertible {
 
 /// Strict JSON (RFC 8259) from UTF-8 bytes, with the `JSON.parse` behaviors that matter for
 /// byte parity: duplicate keys keep the last value at the first key's position, `-0` stays
-/// negative, and a lone surrogate escape yields a `.utf16String`.
+/// negative, and a lone surrogate escape yields a `.utf16String` or a `.utf16` key.
 public enum JSONParser {
     public static func parse(_ bytes: [UInt8]) throws -> JSONValue {
         try bytes.withUnsafeBufferPointer { buffer in
@@ -94,11 +94,10 @@ private struct Parser {
         }
         while true {
             guard position < buffer.count, buffer[position] == UInt8(ascii: "\"") else { throw unexpected() }
-            let keyOffset = position
-            let key: String
+            let key: JSONKey
             switch try parseString() {
-            case .string(let s): key = s
-            case .utf16String: throw error("unpaired surrogate in object key", at: keyOffset)
+            case .string(let s): key = JSONKey(s)
+            case .utf16String(let units): key = JSONKey(storage: .utf16(units))
             default: throw unexpected()
             }
             skipWhitespace()

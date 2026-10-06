@@ -34,7 +34,10 @@ public enum JSONSerializer {
             out.append(UInt8(ascii: "{"))
             for (i, entry) in object.ordered.enumerated() {
                 if i > 0 { out.append(UInt8(ascii: ",")) }
-                writeString(entry.key, into: &out)
+                switch entry.key.storage {
+                case .string(let s): writeString(s, into: &out)
+                case .utf16(let units): writeUTF16String(units, into: &out)
+                }
                 out.append(UInt8(ascii: ":"))
                 write(entry.value, into: &out)
             }
