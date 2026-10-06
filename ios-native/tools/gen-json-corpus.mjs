@@ -43,11 +43,17 @@ const STRING_PIECES = [
 
 const REPO = path.resolve(import.meta.dirname, '../..')
 const LIB = path.join(REPO, 'frontend/src/lib')
-const OUT = path.join(REPO, 'ios-native/OpenGymCore/Tests/OpenGymCoreTests/Fixtures/json-corpus')
 
-const largeIdx = process.argv.indexOf('--large')
-const largePath = largeIdx >= 0 ? process.argv[largeIdx + 1] : null
-if (largeIdx >= 0 && !largePath) throw new Error('--large needs a path')
+const flag = name => {
+  const i = process.argv.indexOf(name)
+  if (i < 0) return null
+  const value = process.argv[i + 1]
+  if (!value) throw new Error(`${name} needs a path`)
+  return value
+}
+const largePath = flag('--large')
+const OUT = flag('--out') ?? path.join(REPO, 'ios-native/OpenGymCore/Tests/OpenGymCoreTests/Fixtures/json-corpus')
+const SYNC_MERGE_TEST = flag('--sync-merge-test') ?? path.join(LIB, 'sync-merge.test.js')
 
 const DEF = {
   unit: 'kg', restSec: 90, restPauseSec: 15, sound: true, soundOnSilent: false, timerFlash: false, timedSetOvertime: false, keepAwake: true, lang: 'en',
@@ -317,7 +323,7 @@ if (largePath) {
 console.log(`cases=${counts.cases} sync-merge=${syncMergeInputs.length} random=${counts.random} edits=${counts.edits} malformed=${counts.malformed} bytes=${totalBytes}`)
 
 async function recordSyncMergeArgs() {
-  const testUrl = pathToFileURL(path.join(LIB, 'sync-merge.test.js')).href
+  const testUrl = pathToFileURL(SYNC_MERGE_TEST).href
   const testSrc = fs.readFileSync(new URL(testUrl), 'utf8')
   const libSpecs = [...testSrc.matchAll(/from '(\.\/[\w.-]+\.js)'/g)].map(m => m[1])
   const exportsOf = new Map()
