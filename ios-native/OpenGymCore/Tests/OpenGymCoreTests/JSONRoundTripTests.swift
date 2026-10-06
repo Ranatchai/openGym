@@ -1,5 +1,5 @@
 import Testing
-@testable import OpenGymCore
+import OpenGymCore
 
 @Suite struct JSONRoundTripTests {
     @Test func corpusIsPresent() {

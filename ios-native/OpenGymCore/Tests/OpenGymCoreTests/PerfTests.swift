@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenGymCore
+import OpenGymCore
 
 /// Parse+serialize wall time on the large state that `gen-json-corpus.mjs --large <path>`
 /// writes. Set `OPENGYM_LARGE_STATE` to that path; the suite is skipped without it.

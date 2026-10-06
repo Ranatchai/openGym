@@ -2,6 +2,11 @@ public struct JSONParseError: Error, Equatable, CustomStringConvertible {
     public let offset: Int
     public let message: String
 
+    public init(offset: Int, message: String) {
+        self.offset = offset
+        self.message = message
+    }
+
     public var description: String { "\(message) at byte \(offset)" }
 }
 

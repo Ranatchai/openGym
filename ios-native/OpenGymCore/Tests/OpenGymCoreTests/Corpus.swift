@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import OpenGymCore
+import OpenGymCore
 
 /// One input/expected pair of the generated corpus under `Fixtures/json-corpus`.
 struct CorpusPair: CustomTestStringConvertible, Sendable {
