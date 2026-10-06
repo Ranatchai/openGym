@@ -1,29 +1,21 @@
 /* ============================================================================
-   openGym — Aura Matrix
+   openGym — Aura Matrix, the light iOS register
    ----------------------------------------------------------------------------
-   The Aura Matrix design system (Exagram, Aura Matrix Kit v1.6), laid over the
-   component sheet in index.css. index.css owns layout and behaviour; this file
-   owns the look. main.jsx imports it last — after index.css, and after admin.css
-   and coach.css, which arrive with App.jsx — so a rule here wins on source order
-   alone and nothing below needs !important, except the corner rule, which has to
-   beat inline styles too.
+   The look of docs/dev/IOS_NATIVE_UI.md, for the web and the Capacitor apps:
+   the platform's own idiom first, Aura only where it is the app's identity.
 
-   What carries the identity, and where it lives:
-     desk      a candy mesh behind everything — body::before
-     material  frosted glass: white sheen over a two-hue tint, a neutral ink ring
-               with a feathered bevel, a soft lift. Never an accent-coloured border.
-               --am-frost (neutral) and --am-frost-bold (accent) below
-     corners   sharp. 0px everywhere; only round data marks keep their shape
-     type      Geist for words, Archivo for the screen anchor and the one tracked
-               label per section, Geist Mono for numbers only
-     colour    five candy hues as the accent; status hues tint status elements only
-     motion    one machined curve; nothing moves that the user did not move
+     kept      the five candy accents (light: the -text tone, dark: -glow), a faint candy
+               mesh behind everything, Archivo on the screen title, monospaced numbers,
+               the status hues
+     platform  the system font, rounded inset-grouped cells, capsule buttons and segments,
+               iOS labels, separators and fills, glass only on what floats (tab bar,
+               accessory, sheets, round header buttons)
+     dropped   sharp corners, the bevel and lift on every card, the frosted card material,
+               Geist, the raised Start button (now the workout accessory, TabBar.jsx)
 
-   Blur is spent only where something scrolls under glass (tab bar, timer, sheets,
-   toast). In-flow cards sit on the mesh itself, a smooth gradient that looks the
-   same blurred or not, so they carry the frost recipe without backdrop-filter —
-   one blurred layer per card was the most expensive thing an Android WebView
-   could be asked to paint, and it bought nothing visible here.
+   index.css owns layout and behaviour; this file owns the look. main.jsx imports it last —
+   after index.css, and after admin.css and coach.css, which arrive with App.jsx — so a rule
+   here wins on source order alone.
    ========================================================================== */
 
 /* ---------------------------------------------------------------- tokens -- */
@@ -31,116 +23,109 @@
   /* the five candy hues (r,g,b) — the accent is one of them */
   --am-orchid:150,90,222; --am-magenta:226,90,160; --am-periwinkle:104,110,230;
   --am-sky:64,168,232; --am-coral:245,150,110;
-  /* verdict + semantic hues, accent depth only (L18) */
+  /* verdict + semantic hues, accent depth only */
   --am-fern:70,172,120; --am-held:226,102,102; --am-marigold:240,178,68;
   --am-teal:46,168,196; --am-mauve:138,96,168;
 
-  --am-ink:30,32,42;
-  --am-ease:cubic-bezier(.22,.61,.36,1);
-
   /* The accent, per account (data-accent below), in five tones:
-       -rgb   the candy hue itself — what the glass is tinted with, never text
-       -deep  text on a bold frost in the light theme (≥5.6:1 measured on the frost)
-       -lift  text on a bold frost in the dark theme
-       -text  the hue at reading depth on the pale desk: --acc in light, as text, icon or a
-              solid fill under white (≥4.7:1 on the desk, ≥5.4:1 under white)
+       -rgb   the candy hue itself — mesh, heatmap, soft fills; never text
+       -text  the hue at reading depth on a light ground: --acc in light, as text, icon or a
+              solid fill under white (≥4.7:1 on the ground, ≥5.4:1 under white)
        -glow  the same in dark, where a solid fill carries -dink (≥5.7:1)
-     index.css, admin.css and coach.css use --acc both as a foreground and as a solid fill with
-     --on-acc on it; giving --acc a readable depth fixes every one of those uses at once. */
+       -deep, -lift  kept for the native rest alert (lib/format.js ACCENT_INK) */
   --acc-rgb:var(--am-orchid); --acc-deep:63,38,93; --acc-lift:208,181,240;
   --acc-text:93,56,138; --acc-glow:179,136,231; --acc-dink:44,27,65;
 
-  --ff-text:'Geist',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
-  --ff-anchor:'Archivo','Geist',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
-  --ff-data:'Geist Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --ff-text:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,system-ui,sans-serif;
+  --ff-anchor:'Archivo',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  --ff-data:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
 
-  --r-sm:0px; --r:0px; --r-lg:0px; --r-xl:0px; --r-card:0px;
-  --ease:var(--am-ease);
+  /* the platform's corners */
+  --r-sm:10px; --r:12px; --r-lg:22px; --r-xl:34px; --r-card:22px;
+  --r-cell:22px; --r-tile:9px; --r-field:10px;
+  --ease:cubic-bezier(.22,.61,.36,1);
+
+  /* the floating dock: the tab row, the workout accessory above it, and the gap they need */
+  --dock-b:max(12px,calc(var(--sab) - 10px));
+  --dock-h:calc(62px + 10px + 50px);
+  --glass-blur:saturate(1.6) blur(20px);
 }
 
-/* Light is Aura Matrix's own register: ink on a pale candy desk. */
 :root,
 :root[data-theme="light"]{
-  --bg:        #efeaf4;
-  --bg-el:     rgba(248,245,252,.78);
-  --surface:   rgba(255,255,255,.56);
-  --surface-2: rgba(var(--am-ink),.07);
-  --surface-3: rgba(var(--am-ink),.09);
+  --bg:      #f8f7fa;
+  --bg-el:   rgba(244,243,247,.94);   /* sheets */
+  --cell:    #fff;                    /* an inset-grouped cell */
+  --surface: #fff;
+  --surface-2: rgba(118,118,128,.12); /* the system fill: pressed, inputs, tracks */
+  --surface-3: rgba(118,118,128,.16);
+  --fill:    rgba(118,118,128,.12);
+  --glass:   rgba(255,255,255,.78);
+  --glass-line: rgba(0,0,0,.06);
+  --seg-sel: #fff;
 
-  --label:   rgb(var(--am-ink));
-  --label-2: rgba(var(--am-ink),.66);
-  --label-3: rgba(var(--am-ink),.42);
-  --label-4: rgba(var(--am-ink),.18);
-  --sep:     rgba(var(--am-ink),.12);
-  --sep-op:  rgba(var(--am-ink),.09);
+  --label:   #000;
+  --label-2: rgba(60,60,67,.6);
+  --label-3: rgba(60,60,67,.3);
+  --label-4: rgba(60,60,67,.18);
+  --sep:     rgba(60,60,67,.29);
+  --sep-op:  rgba(60,60,67,.18);
 
-  /* index.css reaches for Apple's system colours by name; each now means its Aura hue */
-  /* --orange stays an orange so the effort scale (lib/effort.js) keeps its neighbouring bands
-     apart: failure orchid, held red, orange, marigold, fern, teal */
+  /* index.css reaches for the system colours by name; each now means its Aura hue */
   --green:rgb(var(--am-fern)); --red:rgb(var(--am-held)); --orange:rgb(238,138,70);
   --yellow:rgb(var(--am-marigold)); --blue:rgb(var(--am-sky)); --teal:rgb(var(--am-teal));
   --indigo:rgb(var(--am-periwinkle)); --pink:rgb(var(--am-magenta)); --purple:rgb(var(--am-orchid));
-  --mint:rgb(var(--am-fern)); --brown:rgb(var(--am-mauve)); --grey:rgba(var(--am-ink),.45);
+  --mint:rgb(var(--am-fern)); --brown:rgb(var(--am-mauve)); --grey:rgba(60,60,67,.45);
 
-  --acc:   rgb(var(--acc-text));
-  --acc-2: rgb(var(--acc-deep));
-  --acc-ink: rgb(var(--acc-text));                 /* accent used as text on the desk */
-  --on-acc: #fff;                                  /* text on a solid --acc fill */
-  --am-bold-ink: rgb(var(--acc-deep));             /* text on the bold frost */
-  --acc-soft: rgba(var(--acc-rgb),.16);
+  --acc:      rgb(var(--acc-text));
+  --acc-2:    rgb(var(--acc-deep));
+  --acc-ink:  rgb(var(--acc-text));
+  --on-acc:   #fff;
+  --acc-soft: rgba(var(--acc-rgb),.13);
   --acc-line: rgba(var(--acc-rgb),.38);
 
-  --am-sheen-a:rgba(255,255,255,.72); --am-sheen-b:rgba(255,255,255,.24);
-  --am-bold-a:rgba(255,255,255,.34);  --am-bold-b:rgba(255,255,255,.06);
-  --am-ring:rgba(var(--am-ink),.09);
-  --am-bevel:inset 0 2px 1.5px -1.5px rgba(255,255,255,.55),inset 1.5px 0 1px -1px rgba(255,255,255,.30),
-             inset -1.5px 0 1px -1px rgba(var(--am-ink),.10),inset 0 -1px 0 rgba(var(--am-ink),.20);
-  --am-lift:0 1px 2px rgba(var(--am-ink),.06),0 3px 9px rgba(var(--am-ink),.05);
-  --am-tint:1;
+  --float-shadow:0 6px 20px rgba(0,0,0,.08);
   --am-desk:
-    radial-gradient(55% 66% at 14% 10%,rgba(var(--am-orchid),.26),transparent 60%),
-    radial-gradient(52% 62% at 86% 18%,rgba(var(--am-magenta),.22),transparent 62%),
-    radial-gradient(50% 58% at 62% 6%,rgba(var(--am-coral),.15),transparent 60%),
-    radial-gradient(60% 72% at 76% 92%,rgba(var(--am-sky),.18),transparent 64%),
-    #efeaf4;
+    radial-gradient(55% 66% at 14% 10%,rgba(var(--am-orchid),.10),transparent 60%),
+    radial-gradient(52% 62% at 86% 18%,rgba(var(--am-magenta),.08),transparent 62%),
+    radial-gradient(50% 58% at 62% 6%,rgba(var(--am-coral),.09),transparent 60%),
+    radial-gradient(60% 72% at 76% 92%,rgba(var(--am-sky),.12),transparent 64%),
+    #f8f7fa;
 }
 
-/* Dark: the same mesh glowing out of ink, the same glass at a lower sheen. */
 :root[data-theme="dark"]{
-  --bg:        #15131c;
-  --bg-el:     rgba(26,23,36,.82);
-  --surface:   rgba(255,255,255,.07);
-  --surface-2: rgba(255,255,255,.10);
-  --surface-3: rgba(255,255,255,.13);
+  --bg:      #0e0d12;
+  --bg-el:   rgba(18,17,22,.94);
+  --cell:    #1c1c1e;
+  --surface: #1c1c1e;
+  --surface-2: rgba(118,118,128,.24);
+  --surface-3: rgba(118,118,128,.32);
+  --fill:    rgba(118,118,128,.24);
+  --glass:   rgba(30,30,32,.72);
+  --glass-line: rgba(255,255,255,.1);
+  --seg-sel: #636366;
 
-  --label:   rgb(238,236,246);
-  --label-2: rgba(238,236,246,.66);
-  --label-3: rgba(238,236,246,.40);
-  --label-4: rgba(238,236,246,.18);
-  --sep:     rgba(238,236,246,.12);
-  --sep-op:  rgba(238,236,246,.08);
+  --label:   #fff;
+  --label-2: rgba(235,235,245,.6);
+  --label-3: rgba(235,235,245,.3);
+  --label-4: rgba(235,235,245,.18);
+  --sep:     rgba(84,84,88,.65);
+  --sep-op:  rgba(84,84,88,.4);
+  --grey:    rgba(235,235,245,.45);
 
-  --acc:     rgb(var(--acc-glow));
-  --acc-ink: rgb(var(--acc-glow));
-  --on-acc:  rgb(var(--acc-dink));
-  --acc-2:   rgb(var(--acc-lift));
-  --am-bold-ink: rgb(var(--acc-lift));
-  --acc-soft: rgba(var(--acc-rgb),.22);
-  --grey:    rgba(238,236,246,.45);
+  --acc:      rgb(var(--acc-glow));
+  --acc-ink:  rgb(var(--acc-glow));
+  --on-acc:   rgb(var(--acc-dink));
+  --acc-2:    rgb(var(--acc-lift));
+  --acc-soft: rgba(var(--acc-rgb),.24);
 
-  --am-sheen-a:rgba(255,255,255,.12); --am-sheen-b:rgba(255,255,255,.03);
-  --am-bold-a:rgba(255,255,255,.14);  --am-bold-b:rgba(255,255,255,.02);
-  --am-ring:rgba(255,255,255,.10);
-  --am-bevel:inset 0 1.5px 1px -1px rgba(255,255,255,.22),inset 1.5px 0 1px -1px rgba(255,255,255,.08),
-             inset -1.5px 0 1px -1px rgba(0,0,0,.30),inset 0 -1px 0 rgba(0,0,0,.45);
-  --am-lift:0 1px 2px rgba(0,0,0,.30),0 4px 12px rgba(0,0,0,.25);
-  --am-tint:.6;
+  --float-shadow:0 6px 20px rgba(0,0,0,.35);
   --am-desk:
-    radial-gradient(55% 66% at 14% 10%,rgba(var(--am-orchid),.30),transparent 60%),
-    radial-gradient(52% 62% at 86% 18%,rgba(var(--am-magenta),.20),transparent 62%),
-    radial-gradient(50% 58% at 62% 6%,rgba(var(--am-coral),.10),transparent 60%),
-    radial-gradient(60% 72% at 76% 92%,rgba(var(--am-sky),.18),transparent 64%),
-    #15131c;
+    radial-gradient(55% 66% at 14% 10%,rgba(var(--am-orchid),.14),transparent 60%),
+    radial-gradient(52% 62% at 86% 18%,rgba(var(--am-magenta),.09),transparent 62%),
+    radial-gradient(50% 58% at 62% 6%,rgba(var(--am-coral),.06),transparent 60%),
+    radial-gradient(60% 72% at 76% 92%,rgba(var(--am-sky),.12),transparent 64%),
+    #0e0d12;
 }
 
 /* accents: the five candy hues */
@@ -150,216 +135,207 @@
 :root[data-accent="sky"]       {--acc-rgb:var(--am-sky);       --acc-deep:27,71,97;  --acc-lift:169,216,245; --acc-text:40,104,144; --acc-glow:117,192,239; --acc-dink:19,50,68}
 :root[data-accent="coral"]     {--acc-rgb:var(--am-coral);     --acc-deep:103,63,46; --acc-lift:250,208,190; --acc-text:152,93,68;  --acc-glow:248,179,150; --acc-dink:72,44,32}
 
-/* The two materials. A surface takes one by setting its own `background`, `border` and
-   `box-shadow` from these; the hue pair of the neutral frost follows the accent, so the
-   glass leans the way the account does without ever being an accent fill. */
-:root{
-  --am-frost:
-    linear-gradient(150deg,var(--am-sheen-a),var(--am-sheen-b)),
-    linear-gradient(140deg,rgba(var(--acc-rgb),calc(.10 * var(--am-tint))),rgba(var(--am-sky),calc(.07 * var(--am-tint))));
-  --am-frost-chip:
-    linear-gradient(150deg,var(--am-sheen-a),var(--am-sheen-b)),
-    linear-gradient(140deg,rgba(var(--acc-rgb),calc(.30 * var(--am-tint))),rgba(var(--am-sky),calc(.20 * var(--am-tint))));
-  --am-frost-bold:
-    linear-gradient(150deg,var(--am-bold-a),var(--am-bold-b)),
-    linear-gradient(140deg,rgba(var(--acc-rgb),.60),rgba(var(--acc-rgb),.42));
-  --am-shadow:var(--am-bevel),var(--am-lift);
-  --am-shadow-bold:var(--am-bevel),0 1px 3px rgba(var(--acc-rgb),.16),0 4px 12px rgba(var(--acc-rgb),.12);
-  --am-glass:saturate(1.4) blur(12px);
-}
-
 /* ------------------------------------------------------------------ desk -- */
 html{background:var(--bg)}
-body{background:transparent;font-family:var(--ff-text);letter-spacing:-.005em}
+body{background:transparent;font-family:var(--ff-text)}
 /* A fixed layer rather than background-attachment:fixed, which iOS WebKit ignores. */
-body::before{
-  content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
-  background:var(--am-desk);
-}
-
-/* ---------------------------------------------------------------- corners -- */
-/* Sharp, everywhere (locked in the kit) — switches and slider knobs included. Inline styles
-   too, hence !important. Only round data marks keep their shape: status dots, the typing dots,
-   and the Coach's score ring, whose reading depends on being a circle. */
-*,*::before,*::after{border-radius:0!important}
-.wday .dot,.cal-d i,.cal-legend i,.ci-dot,.ob-dot,.typing i,.deb-ring,.deb-item::before,
-.adm-pill::before{border-radius:50%!important}
+body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;background:var(--am-desk)}
+#app{padding-bottom:calc(var(--dock-b) + var(--dock-h) + 20px)}
+body.resting #app{padding-bottom:calc(var(--dock-b) + var(--dock-h) + 140px)}
+:root[data-native-kb] #app,:root[data-native-kb] body.resting #app{padding-bottom:calc(var(--dock-b) + var(--dock-h) + var(--native-kb))}
 
 /* ------------------------------------------------------------------- type -- */
-/* The anchor: the one large title a screen has. Archivo, and nothing else is set in it but
-   the section label below. */
-.hdr h1,.t-large,.t-title{font-family:var(--ff-anchor);font-weight:600;letter-spacing:-.022em}
-.hdr h1{font-size:32px;line-height:1.08}
-@media (max-width:420px){.hdr h1{font-size:28px}}
-.t-title2,.t-head{font-weight:600}
-/* The tracked label: one per section, at its boundary. */
-h4.sec,.sect-t,.card h2{
-  font-family:var(--ff-anchor);font-size:11px;font-weight:600;line-height:1.3;
-  letter-spacing:.08em;text-transform:uppercase;color:var(--label-2);
+/* The screen title is the one thing set in Archivo; numbers read as data. */
+.hdr h1,.t-large,.t-title{font-family:var(--ff-anchor);font-weight:700;letter-spacing:-.02em}
+.hdr h1{font-size:34px;line-height:1.1}
+@media (max-width:420px){.hdr h1{font-size:30px}}
+/* A section inside a screen: a bold headline, the way the platform titles a group. */
+h4.sec,.card h2{
+  font-size:22px;font-weight:700;letter-spacing:-.01em;color:var(--label);
+  text-transform:none;margin:22px 0 8px;line-height:1.2;
 }
-/* Numbers read as data. Words never do — so .big, which carries a body weight on one card and
-   "Welcome!" or a routine's name on the next, stays in Geist with tabular figures. */
-.stat-v,.tile .v,.stp .num,.stp .val,#timer .t,.bw-read .num,
-.acct-id,.search .search-count,.efftbl .n,.setrow .n{font-family:var(--ff-data);letter-spacing:-.02em}
-#timer .t{font-weight:500}
-.card .big{font-weight:600;letter-spacing:-.022em}
+/* Inside a cell the heading is the platform's headline: the cell already says "group". */
+.card h2{font-size:17px;font-weight:600;letter-spacing:-.01em;margin:0 0 10px}
+/* A grouped list's own label (Settings): small, upper case, outside the cell. */
+.sect-t{font-size:13px;font-weight:400;text-transform:uppercase;letter-spacing:0;color:var(--label-2);padding:0 20px 6px}
+.sect-f{padding:7px 20px 0}
+.stat-v,.tile .v,.stp .num,.stp .val,#timer .t,.bw-read .num,.acct-id,.search .search-count,
+.efftbl .n,.setrow .n,.whdr .sub,.card .big{font-family:var(--ff-data);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.card .big{font-weight:500}
+a,.accent{color:var(--acc-ink)}
 :focus-visible{outline-color:var(--acc)}
-a{color:var(--acc-ink)}
-.accent{color:var(--acc-ink)}
 
 /* --------------------------------------------------------------- surfaces -- */
-/* Raised, in-flow: the neutral frost, no blur (see the note at the top). */
-.card,.sect-b,.item,.tile,.exnote,.exlink-card,.wl-unit,.today-row,.ss-card,.cal-grid,.empty,
-.wmedia-item,.wmedia-add{
-  background:var(--am-frost);border:1px solid var(--am-ring);box-shadow:var(--am-shadow);
+/* An inset-grouped cell: solid, rounded, no border and no shadow. */
+.card,.sect-b,.tile,.exnote,.exlink-card,.wl-unit,.ss-card,.cal-grid{
+  background:var(--cell);border-radius:var(--r-cell);border:0;box-shadow:none;
 }
+.item,.today-row{background:var(--cell);border-radius:16px;border:0;box-shadow:none}
+/* A cell inside a cell takes the fill instead, or it would vanish into its parent. */
+.card .item,.card .today-row,.card .exnote,.sect-b .item{background:var(--fill)}
 .item:active,.today-row:active,.lrow.tap:active,.exlink-card:active{background:var(--surface-2)}
+.card .item:active,.card .today-row:active{background:var(--surface-3)}
 @media (hover:hover){
-  .today-row:hover,:root[data-theme="light"] .today-row:hover{background:var(--am-frost-chip)}
+  .today-row:hover,:root[data-theme="light"] .today-row:hover{background:var(--surface-2)}
 }
-.routine-drag-row.is-dragging .item{background:var(--am-frost-chip);box-shadow:var(--am-bevel),0 10px 28px rgba(var(--am-ink),.18)}
-.thumb{background:#fff;border:1px solid var(--am-ring)}
-.thumb-x{background:var(--surface-2)}
-.lrow-i{background:rgba(var(--acc-rgb),.18);color:var(--acc-ink)}
-.lrow-i[style*="--tint"]{background:color-mix(in srgb,var(--tint) 24%,transparent);color:color-mix(in srgb,var(--tint) 55%,var(--label))}
-.lrow.danger,.lrow.danger .lrow-t{color:var(--red)}
-.tag{background:var(--surface-2);color:var(--label-2)}
+.routine-drag-row.is-dragging .item{background:var(--cell);box-shadow:0 10px 28px rgba(0,0,0,.18)}
+.thumb{border-radius:12px;background:#fff}
+.thumb-x{background:var(--fill)}
+.lrow-i{border-radius:var(--r-tile);background:var(--acc-soft);color:var(--acc-ink)}
+.lrow-i[style*="--tint"]{background:color-mix(in srgb,var(--tint) 18%,transparent);color:color-mix(in srgb,var(--tint) 70%,var(--label))}
+.tag{background:var(--fill);color:var(--label-2);border-radius:7px}
 .tag.acc{background:var(--acc-soft);color:var(--acc-ink)}
 
-/* Floating, over scrolling content: the frost with real glass behind it. */
-#tabbar,#timer,#toast,.sheet,.center,.conn-bar,.whdr.stick{
-  -webkit-backdrop-filter:var(--am-glass);backdrop-filter:var(--am-glass);
-}
-#tabbar{
-  background:linear-gradient(180deg,var(--am-sheen-a),var(--am-sheen-b)),var(--bg-el);
-  border-top:1px solid var(--am-ring);box-shadow:inset 0 1px 0 rgba(255,255,255,.35);
-}
-#tabbar button{font-family:var(--ff-text);font-weight:500}
-#tabbar button.on{color:var(--acc-ink)}
-#tabbar button.start .cir{
-  background:var(--am-frost-bold);color:var(--am-bold-ink);border:1px solid var(--am-ring);
-  box-shadow:var(--am-shadow-bold);
-}
-#tabbar button.start span{color:var(--acc-ink)}
-#tabbar button.start.rec .cir{
-  background:linear-gradient(150deg,var(--am-bold-a),var(--am-bold-b)),linear-gradient(140deg,rgba(var(--am-marigold),.70),rgba(var(--am-marigold),.52));
-  color:rgb(101,75,29);box-shadow:var(--am-bevel),0 4px 12px rgba(var(--am-marigold),.22);
-}
-:root[data-theme="dark"] #tabbar button.start.rec .cir{color:rgb(249,225,182)}
-/* marigold as text needs its depth on the pale desk; the hue itself is for the disc */
-#tabbar button.start.rec span{color:rgb(150,104,26)}
-:root[data-theme="dark"] #tabbar button.start.rec span{color:rgb(var(--am-marigold))}
-#tabbar button.start.rec .cir::after{border-color:rgb(var(--am-marigold))}
-
-#timer{
-  background:var(--am-frost),var(--bg-el);border:1px solid var(--am-ring);
-  box-shadow:var(--am-bevel),0 12px 34px -10px rgba(var(--am-ink),.35);
-}
-#timer.working{border-color:var(--am-ring);box-shadow:var(--am-bevel),inset 3px 0 0 var(--acc),0 12px 34px -10px rgba(var(--am-ink),.35)}
-#timer.working .t{color:var(--acc-ink)}
-#timer .bar,.wprog,.mrow .bar,.sld-track{background:var(--surface-3)}
-
-.mback{background:rgba(var(--am-ink),.28)}
-:root[data-theme="dark"] .mback{background:rgba(0,0,0,.5)}
-.sheet,.center{
-  background:var(--am-frost),var(--bg-el);border:1px solid var(--am-ring);border-bottom:0;
-  box-shadow:var(--am-bevel),0 -8px 30px rgba(var(--am-ink),.12);
-}
-.center{border-bottom:1px solid var(--am-ring)}
-.sheet .grab{background:var(--label-4)}
-.picker-search,:root[data-theme="light"] .picker-search{background:transparent}
-#toast{background:var(--am-frost-chip),var(--bg-el);border:1px solid var(--am-ring);box-shadow:var(--am-shadow);color:var(--label)}
-.conn-bar{background:var(--bg-el)}
-.conn{background:linear-gradient(140deg,rgba(var(--am-marigold),.22),rgba(var(--am-marigold),.12));border:1px solid var(--am-ring)}
-.conn-bar.bad .conn{background:linear-gradient(140deg,rgba(var(--am-held),.20),rgba(var(--am-held),.10))}
-.conn-bar.off .conn{background:var(--surface-2)}
-.conn-bar.quiet .conn{background:none;border:0}
-
 /* --------------------------------------------------------------- buttons -- */
-/* Chrome follows function: one bold frost for the commit, the neutral frost for the rest,
-   text buttons stay flat. */
+/* Capsules. One solid accent commit per screen; the rest sit on the system fill. */
 .btn{
-  background:var(--am-frost-chip);border:1px solid var(--am-ring);box-shadow:var(--am-shadow);
-  color:var(--label);font-weight:600;letter-spacing:-.005em;
-  transition:transform var(--fast) var(--am-ease),filter var(--fast) var(--am-ease),opacity var(--fast);
+  border-radius:999px;background:var(--fill);color:var(--label);border:0;box-shadow:none;
+  font-weight:600;transition:transform var(--fast) var(--ease),opacity var(--fast),background var(--fast);
 }
-.btn:active{transform:scale(.98);filter:brightness(.97)}
-.btn.primary,.btn.primary:active{background:var(--am-frost-bold);color:var(--am-bold-ink);box-shadow:var(--am-shadow-bold)}
-.btn.tinted{background:var(--acc-soft);border-color:transparent;box-shadow:none;color:var(--acc-ink)}
-.btn.danger{
-  background:linear-gradient(150deg,var(--am-bold-a),var(--am-bold-b)),linear-gradient(140deg,rgba(var(--am-held),.26),rgba(var(--am-held),.16));
-  color:rgb(120,42,42);
+.btn:active{transform:scale(.98);background:var(--surface-3)}
+.btn.primary,.btn.primary:active{background:var(--acc);color:var(--on-acc)}
+.btn.primary:active{opacity:.85}
+.btn.tinted{background:var(--acc-soft);color:var(--acc-ink)}
+.btn.danger{background:rgba(var(--am-held),.14);color:rgb(176,52,52)}
+:root[data-theme="dark"] .btn.danger{color:rgb(246,150,150)}
+.btn.ghost,.btn.plain{background:none;color:var(--acc-ink);font-weight:400}
+.btn.ghost:active,.btn.plain:active{background:var(--fill)}
+.btn.sm,.btn.xs{border-radius:999px}
+/* Round buttons: glass where they float over the desk, the fill inside a cell. */
+.iconbtn{
+  border-radius:50%;background:var(--glass);border:1px solid var(--glass-line);color:var(--label);
+  box-shadow:0 2px 10px rgba(0,0,0,.06);
+  -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
 }
-:root[data-theme="dark"] .btn.danger{color:rgb(246,190,190)}
-.btn.ghost,.btn.plain{background:none;border-color:transparent;box-shadow:none;color:var(--acc-ink)}
-.btn.ghost:active,.btn.plain:active{background:var(--surface-2)}
-.iconbtn{background:var(--am-frost-chip);border:1px solid var(--am-ring);box-shadow:var(--am-shadow);color:var(--label)}
-.iconbtn:active{background:var(--surface-2)}
+.hdr .iconbtn{width:44px;height:44px;font-size:20px}
+.card .iconbtn,.sheet .iconbtn,.item .iconbtn,.center .iconbtn{
+  background:var(--fill);border-color:transparent;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;
+}
+.iconbtn:active{background:var(--surface-3)}
 .iconbtn.on-ss{background:var(--acc-soft);color:var(--acc-ink)}
-.setrow .setgo{box-shadow:none}
 
 /* ---------------------------------------------------------------- chips -- */
-.chip{background:var(--am-frost);border:1px solid var(--am-ring);color:var(--label);box-shadow:var(--am-bevel)}
-.chip:active{background:var(--surface-2)}
-.chip.on{background:var(--am-frost-bold);color:var(--am-bold-ink);box-shadow:var(--am-shadow-bold)}
-.chip.on .dim{color:rgba(var(--acc-deep),.62)}
-:root[data-theme="dark"] .chip.on .dim{color:rgba(var(--acc-lift),.62)}
-.mchip{border:1px solid var(--am-ring)}
+.chip{border-radius:999px;background:var(--fill);color:var(--label);border:0}
+.chip:active{background:var(--surface-3)}
+.chip.on{background:var(--acc);color:var(--on-acc)}
+.chip.on .dim{color:color-mix(in srgb,var(--on-acc) 65%,transparent)}
 
 /* ------------------------------------------------------------- controls -- */
-/* Text inputs are frosted glass, not wells. Wells are only the recessed tracks. */
-.field,.input,.timef,.bwin input{
-  background:var(--am-frost);border:1px solid var(--am-ring);box-shadow:var(--am-bevel);
-}
-.field:focus,.input:focus{box-shadow:var(--am-bevel),0 0 0 2px rgba(var(--acc-rgb),.45);border-color:transparent}
+.field,.input,.timef,.bwin input{background:var(--fill);border:0;border-radius:var(--r-field);box-shadow:none}
+.field:focus,.input:focus{box-shadow:0 0 0 2px var(--acc)}
 .searchf .field,.search .input,
-:root[data-theme="light"] .searchf .field,:root[data-theme="light"] .search .input{
-  background:var(--am-frost);border:1px solid var(--am-ring);
-}
-.searchf .clear{background:var(--label-3);color:#fff}
+:root[data-theme="light"] .searchf .field,:root[data-theme="light"] .search .input{background:var(--fill);border-radius:12px}
 
-.sw{background:var(--surface-3);box-shadow:inset 0 1px 2px rgba(var(--am-ink),.12)}
-.sw .knob{background:linear-gradient(150deg,#fff,rgba(255,255,255,.86));box-shadow:var(--am-bevel),0 1px 3px rgba(var(--am-ink),.18)}
-.sw.on{background:linear-gradient(140deg,rgba(var(--acc-rgb),.78),rgba(var(--acc-rgb),.60))}
+/* iOS 26 switch: a long capsule with a pill knob. */
+.sw{width:62px;height:28px;border-radius:14px;background:var(--fill);padding:2px}
+.sw .knob{width:38px;height:24px;border-radius:12px;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.2)}
+.sw.on{background:var(--acc)}
+.sw.on .knob{transform:translateX(20px)}
+.sw:active .knob{width:42px}
+.sw.on:active .knob{transform:translateX(16px)}
 
-.seg,:root[data-theme="light"] .seg{background:var(--surface-3);box-shadow:inset 0 1px 2px rgba(var(--am-ink),.10)}
-.seg-sel,:root[data-theme="light"] .seg-sel{
-  background:var(--am-frost-chip),var(--bg-el);border:1px solid var(--am-ring);box-shadow:var(--am-shadow);
-}
+.seg,:root[data-theme="light"] .seg{background:var(--fill);border-radius:16px;box-shadow:none}
+.seg-sel,:root[data-theme="light"] .seg-sel{background:var(--seg-sel);border-radius:14px;border:0;box-shadow:0 2px 6px rgba(0,0,0,.12)}
 
-.stp button{background:var(--am-frost-chip);border:1px solid var(--am-ring);box-shadow:var(--am-bevel)}
-.stp button:active{background:var(--surface-2)}
+.stp button{background:var(--fill);border:0;box-shadow:none}
+.stp button:active{background:var(--surface-3)}
 
-.chk.on,.ck.on{background:var(--am-frost-bold);color:var(--am-bold-ink);box-shadow:var(--am-shadow-bold)}
+/* The set check: a ring, filled with the accent once the set is done. */
+.chk.on,.ck.on{background:var(--acc);color:var(--on-acc);border-color:var(--acc)}
 
+.sld-track{background:var(--fill)}
 .sld-fill{background:var(--acc)}
-.sld-knob{background:#fff;border:1px solid var(--am-ring);box-shadow:var(--am-bevel),0 1px 3px rgba(var(--am-ink),.2)}
+.sld-knob{background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.2)}
 
 /* ------------------------------------------------------------ week strip -- */
-.wday .lbl{font-family:var(--ff-anchor);letter-spacing:.08em;font-weight:600;font-size:10px}
-.wday.today .num{background:var(--am-frost-bold);color:var(--am-bold-ink);box-shadow:var(--am-shadow-bold);font-family:var(--ff-data);font-weight:500}
-.wday .num{font-family:var(--ff-data)}
+.wday .lbl{font-weight:500;font-size:12px;letter-spacing:0;color:var(--label-2)}
+.wday .num{font-size:19px}
+.wday.today .num{width:36px;height:36px;border-radius:50%;background:var(--acc);color:var(--on-acc)}
 .wday .dot.done{background:var(--acc)}
+.wday .dot.plan{background:var(--label-3)}
 .cal-d.today{box-shadow:inset 0 0 0 1.5px var(--acc)}
 
 /* ------------------------------------------------------------ data marks -- */
-/* A data mark takes the material's hue, never its affordance: no bevel, no lift. */
-#timer .bar i,.wprog i,.mrow .bar i{background:linear-gradient(90deg,rgba(var(--acc-rgb),.74),rgb(var(--acc-rgb)))}
+#timer .bar,.wprog,.mrow .bar{background:var(--fill)}
+#timer .bar i,.wprog i,.mrow .bar i{background:var(--acc)}
 .hm-c.l1{background:rgba(var(--acc-rgb),.22)}
 .hm-c.l2{background:rgba(var(--acc-rgb),.42)}
 .hm-c.l3{background:rgba(var(--acc-rgb),.64)}
-.hm-c.l4{background:rgba(var(--acc-rgb),.88)}
-.swatch{border:1px solid var(--am-ring);box-shadow:var(--am-bevel)}
+.hm-c.l4{background:rgba(var(--acc-rgb),.9)}
 .routine-drop-indicator{background:var(--acc)}
 
-/* -------------------------------------------------------- reduced motion -- */
-/* index.css already turns animation off under prefers-reduced-motion; the glass also goes
-   flat where the system asks for less transparency. */
-/* :root[data-theme] lifts these above index.css's own light-theme surface rules. */
+/* ------------------------------------------------- the dock (TabBar.jsx) -- */
+/* index.css draws a full-width bar; here it is a floating stack instead — the workout
+   accessory on top, then the tab capsule and the round search button side by side. */
+#tabbar,:root[data-theme="light"] #tabbar{
+  inset-inline-start:16px;inset-inline-end:16px;bottom:var(--dock-b);
+  display:flex;flex-direction:column;align-items:stretch;gap:10px;
+  padding:0;background:none;border:0;
+  -webkit-backdrop-filter:none;backdrop-filter:none;pointer-events:none;
+}
+#tabbar>*{pointer-events:auto}
+#tabbar .tb-row{display:flex;gap:10px;height:62px}
+#tabbar .tb-pill,#tabbar .tb-search,#tabbar .acc{
+  background:var(--glass);border:1px solid var(--glass-line);box-shadow:var(--float-shadow);
+  -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
+}
+#tabbar .tb-pill{flex:1;border-radius:31px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:4px}
+#tabbar .tb-pill button{
+  border-radius:27px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  padding:0;color:var(--label);font-size:10px;font-weight:500;
+}
+#tabbar .tb-pill button .icn{font-size:24px;color:inherit;--icon-stroke:1.8}
+#tabbar .tb-pill button.on{background:var(--fill);color:var(--acc-ink);font-weight:600}
+#tabbar .tb-pill button.on .icn{--icon-stroke:2}
+#tabbar .tb-pill button:active{background:var(--surface-3)}
+#tabbar .tb-search{
+  flex:none;width:62px;height:62px;border-radius:50%;padding:0;
+  display:flex;align-items:center;justify-content:center;color:var(--label);
+}
+#tabbar .tb-search .icn{font-size:24px;color:inherit}
+#tabbar .tb-search.on{color:var(--acc-ink)}
+/* The workout accessory: today's session, or the one running, a tap away. */
+#tabbar .acc{
+  height:50px;border-radius:25px;flex:none;display:flex;flex-direction:row;align-items:center;gap:10px;
+  padding:0 8px 0 18px;color:var(--label);font-size:15px;font-weight:400;text-align:start;
+}
+#tabbar .acc>.icn{font-size:20px;color:var(--acc-ink);flex:none}
+#tabbar .acc .acc-dot{width:10px;height:10px;border-radius:50%;background:rgb(var(--am-marigold));flex:none}
+#tabbar .acc .acc-t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#tabbar .acc .acc-t b{font-weight:600}
+#tabbar .acc .acc-t span{color:var(--label-2)}
+#tabbar .acc .acc-go{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;color:var(--label)}
+#tabbar .acc .acc-go .icn{font-size:18px;fill:currentColor;color:inherit}
+
+/* ---------------------------------------------------- floating & modals -- */
+#timer{
+  bottom:calc(var(--dock-b) + var(--dock-h) + 10px);inset-inline-start:16px;inset-inline-end:16px;
+  background:var(--glass);border:1px solid var(--glass-line);border-radius:var(--r-cell);
+  box-shadow:0 12px 34px -10px rgba(0,0,0,.25);
+  -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
+}
+#timer.working{border-color:var(--acc-line)}
+#timer.working .t{color:var(--acc-ink)}
+.mback{background:rgba(0,0,0,.16)}
+:root[data-theme="dark"] .mback{background:rgba(0,0,0,.4)}
+.sheet,:root[data-theme="light"] .sheet{
+  background:var(--bg-el);border-radius:var(--r-xl) var(--r-xl) 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.10);
+  -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
+}
+.sheet .grab{width:36px;height:5px;border-radius:3px;background:var(--label-3)}
+.center,:root[data-theme="light"] .center{background:var(--bg-el);border-radius:var(--r-cell);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur)}
+.picker-search,:root[data-theme="light"] .picker-search{background:transparent}
+#toast{background:var(--glass);border:1px solid var(--glass-line);border-radius:999px;box-shadow:var(--float-shadow);color:var(--label);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur)}
+
+/* ------------------------------------------------------ less transparency -- */
 @media (prefers-reduced-transparency:reduce){
-  :root[data-theme] #tabbar,:root[data-theme] #timer,:root[data-theme] #toast,:root[data-theme] .sheet,
-  :root[data-theme] .center,:root[data-theme] .conn-bar,:root[data-theme] .whdr.stick{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--bg)}
+  body::before{background:var(--bg)}
+  :root[data-theme] #tabbar .tb-pill,:root[data-theme] #tabbar .tb-search,:root[data-theme] #tabbar .acc,
+  :root[data-theme] #timer,:root[data-theme] #toast,:root[data-theme] .sheet,:root[data-theme] .center,:root[data-theme] .iconbtn{
+    -webkit-backdrop-filter:none;backdrop-filter:none;background:var(--cell);
+  }
 }
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
-  :root[data-theme] #tabbar,:root[data-theme] #timer,:root[data-theme] #toast,:root[data-theme] .sheet,:root[data-theme] .center{background:var(--bg)}
+  :root[data-theme] #tabbar .tb-pill,:root[data-theme] #tabbar .tb-search,:root[data-theme] #tabbar .acc,
+  :root[data-theme] #timer,:root[data-theme] #toast,:root[data-theme] .sheet,:root[data-theme] .center{background:var(--cell)}
 }

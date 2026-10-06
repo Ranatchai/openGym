@@ -51,12 +51,15 @@ describe('the tab bar across a store write', () => {
 
   it('still lights the tab for the route it is on, and follows a change of state', () => {
     act(() => { root.render(<TabBar onStart={() => {}} />) })
-    expect(tabs()[0].className).toBe('on')
-    expect(tabs()[1].className).toBe('')
-    expect(tabs()[2].className).toBe('start')
+    // the workout accessory, the three tabs, then the round search button
+    expect(tabs()[0].className).toBe('acc')
+    expect(tabs()[1].className).toBe('on')
+    expect(tabs()[2].className).toBe('')
+    expect(tabs()[4].className).toBe('tb-search')
 
-    act(() => { useStore.getState().update(s => { s.active = { id: 'a', entries: [], cur: 0 } }, false) })
-    expect(tabs()[2].className).toBe('start rec')
-    expect(tabs()[0].className).toBe('on')
+    act(() => { useStore.getState().update(s => { s.active = { id: 'a', name: 'Push Day', entries: [], cur: 0 } }, false) })
+    expect(tabs()[0].className).toBe('acc rec')
+    expect(tabs()[0].textContent).toContain('Push Day')
+    expect(tabs()[1].className).toBe('on')
   })
 })
