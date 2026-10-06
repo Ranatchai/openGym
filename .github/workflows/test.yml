@@ -184,7 +184,8 @@ jobs:
         with:
           node-version: 24
       - run: swift --version
-      - run: node ios-native/tools/gen-json-corpus.mjs
-      - run: git diff --exit-code --stat -- ios-native/OpenGymCore/Tests/OpenGymCoreTests/Fixtures
+      - name: generated fixtures are committed and current
+        run: sh ios-native/tools/check-corpus.sh
+      - run: sh ios-native/tools/check-corpus.test.sh
       - run: swift test
         working-directory: ios-native/OpenGymCore
