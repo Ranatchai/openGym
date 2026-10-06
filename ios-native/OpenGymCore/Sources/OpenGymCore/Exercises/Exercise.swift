@@ -1,5 +1,3 @@
-/// One built-in exercise as `CATALOGUE` in `frontend/src/lib/exercises.js` holds it, read from
-/// the bundled `exercises.json`. Field names match the web catalogue so ported code reads alike.
 public struct Exercise: Codable, Hashable, Identifiable, Sendable {
     public let id: String
     public let n: String
