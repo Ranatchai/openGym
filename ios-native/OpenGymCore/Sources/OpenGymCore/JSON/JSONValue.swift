@@ -21,11 +21,14 @@ public enum JSONValue: Equatable, Sendable {
 /// setting it again appends it, as JS does.
 public struct JSONObject: Equatable, Sendable {
     private var entries: [(key: String, value: JSONValue)]
-    private var slot: [String: Int]
+    /// Built once an object outgrows a linear scan. Most objects in a state (set rows,
+    /// entries, weigh-ins) have a handful of keys, and a dictionary per object dominated
+    /// parse time.
+    private var slot: [String: Int]?
+    private static let scanLimit = 8
 
     public init() {
         entries = []
-        slot = [:]
     }
 
     public init(_ pairs: [(String, JSONValue)]) {
@@ -36,18 +39,24 @@ public struct JSONObject: Equatable, Sendable {
     public var count: Int { entries.count }
     public var isEmpty: Bool { entries.isEmpty }
 
+    private func position(of key: String) -> Int? {
+        if let slot { return slot[key] }
+        return entries.firstIndex { $0.key == key }
+    }
+
     public subscript(key: String) -> JSONValue? {
         get {
-            guard let index = slot[key] else { return nil }
+            guard let index = position(of: key) else { return nil }
             return entries[index].value
         }
         set {
             if let newValue {
-                if let index = slot[key] {
+                if let index = position(of: key) {
                     entries[index].value = newValue
                 } else {
-                    slot[key] = entries.count
+                    slot?[key] = entries.count
                     entries.append((key, newValue))
+                    if slot == nil, entries.count > JSONObject.scanLimit { rebuildSlot() }
                 }
             } else {
                 remove(key)
@@ -56,9 +65,16 @@ public struct JSONObject: Equatable, Sendable {
     }
 
     public mutating func remove(_ key: String) {
-        guard let index = slot.removeValue(forKey: key) else { return }
+        guard let index = position(of: key) else { return }
         entries.remove(at: index)
-        for i in index..<entries.count { slot[entries[i].key] = i }
+        if slot != nil { rebuildSlot() }
+    }
+
+    private mutating func rebuildSlot() {
+        var built: [String: Int] = [:]
+        built.reserveCapacity(entries.count)
+        for (i, entry) in entries.enumerated() { built[entry.key] = i }
+        slot = built
     }
 
     /// Key-value pairs in JS enumeration order.
