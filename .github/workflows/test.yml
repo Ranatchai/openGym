@@ -183,7 +183,11 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - run: swift --version
+      - run: npm ci
+        working-directory: frontend
       - name: generated fixtures are committed and current
         run: sh ios-native/tools/check-corpus.sh
       - run: sh ios-native/tools/check-corpus.test.sh
