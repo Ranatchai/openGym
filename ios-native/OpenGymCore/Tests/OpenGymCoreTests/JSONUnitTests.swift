@@ -108,6 +108,8 @@ private func roundTrip(_ text: String) throws -> String {
         #expect(JSONValue.string(nfc) != .string(nfd))
         #expect(JSONValue.string(nfc) == .string("\u{E9}"))
         #expect(JSONValue.array([.string(nfc)]) != .array([.string(nfd)]))
+        #expect(JSONValue.string("😀") == .utf16String([0xD83D, 0xDE00]))
+        #expect(JSONValue.string("a") != .utf16String([0xD83D]))
     }
 }
 
@@ -132,6 +134,36 @@ private func roundTrip(_ text: String) throws -> String {
 
     @Test func objectsWithEquivalentButDifferentKeysAreNotEqual() {
         #expect(JSONObject([("\u{E9}", .null)]) != JSONObject([("e\u{301}", .null)]))
+    }
+
+    @Test func loneSurrogateKeysLookUpByCodeUnits() throws {
+        guard case .object(var o) = try JSONParser.parse(#"{"\ud800":1,"\udc00":2,"\ud83d\ude00":3}"#) else { throw JSONParseError(offset: 0, message: "not an object") }
+        let high = JSONKey(utf16: [0xD800])
+        #expect(o[high] == .number(1))
+        #expect(o[JSONKey(utf16: [0xDC00])] == .number(2))
+        #expect(o[JSONKey(utf16: [0xD83D, 0xDE00])] == .number(3))
+        #expect(o["😀"] == .number(3))
+        #expect(high.string == nil)
+        #expect(high.utf16 == [0xD800])
+        #expect(JSONKey(utf16: [0xD83D, 0xDE00]).string == "😀")
+        #expect(o.keys.map(\.description) == ["\u{FFFD}", "\u{FFFD}", "😀"])
+        o[high] = .number(9)
+        o[JSONKey(utf16: [0xDC00])] = nil
+        #expect(JSONSerializer.string(.object(o)) == #"{"\ud800":9,"😀":3}"#)
+    }
+
+    @Test func keysWorkAsLiteralsAndInterpolations() {
+        var o = JSONObject()
+        for i in 0..<3 { o["k\(i)"] = .number(Double(i)) }
+        #expect(o.keys == ["k0", "k1", "k2"])
+        #expect(o.keys == (0..<3).map { "k\($0)" })
+        #expect(o[JSONKey("k1")] == .number(1))
+        #expect(JSONKey("a") == "a")
+        #expect(JSONKey("\u{E9}") != JSONKey("e\u{301}"))
+        #expect(JSONKey("\u{E9}").hashValue != JSONKey("e\u{301}").hashValue)
+        var set: Set<JSONKey> = ["\u{E9}", "e\u{301}"]
+        set.insert("\u{E9}")
+        #expect(set.count == 2)
     }
 
     @Test(arguments: [
