@@ -108,6 +108,13 @@ describe('addDrop / addCluster', () => {
     expect(next.type).toBe('restpause')
     expect(next.clusters).toEqual([{ r: 4, restSec: 15 }])
   })
+
+  it('starts the list on a row without one and reads a missing or non-numeric field as 0', () => {
+    expect(addCluster({ w: 60, r: 8, clusters: 'x' }, { r: '3' }))
+      .toEqual({ w: 60, r: 8, type: 'restpause', clusters: [{ r: 3, restSec: 0 }] })
+    expect(addCluster(null, undefined)).toEqual({ type: 'restpause', clusters: [{ r: 0, restSec: 0 }] })
+    expect(addDrop(undefined, { w: 'heavy', r: NaN })).toEqual({ type: 'dropset', drops: [{ w: 0, r: 0 }] })
+  })
 })
 
 describe('removeDropAt / removeClusterAt', () => {
@@ -130,6 +137,24 @@ describe('removeDropAt / removeClusterAt', () => {
     expect(removeClusterAt(burst, 0)).toEqual({ type: 'straight', w: 60, r: 8, clusters: [] })
     expect(isRestPauseSet(removeClusterAt(burst, 0))).toBe(false)
   })
+
+  it('removes nothing for an index outside the list', () => {
+    const burst = { type: 'restpause', w: 60, r: 8, clusters: [{ r: 4, restSec: 15 }] }
+    expect(removeClusterAt(burst, 5)).toEqual(burst)
+    expect(removeClusterAt(burst, -1)).toEqual(burst)
+    const drop = { type: 'dropset', w: 100, r: 5, drops: [{ w: 80, r: 5 }] }
+    expect(removeDropAt(drop, 1)).toEqual(drop)
+  })
+
+  it('reads a missing row or list as empty, so the result is a straight set', () => {
+    expect(removeClusterAt({ w: 60, r: 8 }, 0)).toEqual({ w: 60, r: 8, type: 'straight', clusters: [] })
+    expect(removeDropAt(null, 0)).toEqual({ type: 'straight', drops: [] })
+  })
+
+  it('throws a TypeError for a list that is not an array', () => {
+    expect(() => removeDropAt({ drops: 'x' }, 0)).toThrow(TypeError)
+    expect(() => removeClusterAt({ clusters: 5 }, 0)).toThrow(TypeError)
+  })
 })
 
 describe('setDropAt / setClusterAt', () => {
@@ -147,6 +172,15 @@ describe('setDropAt / setClusterAt', () => {
   it('is a no-op for an index that does not exist', () => {
     const set = { type: 'dropset', w: 100, r: 5, drops: [{ w: 80, r: 5 }] }
     expect(setDropAt(set, 3, { w: 1 })).toBe(set)
+  })
+
+  it('returns the row unchanged for a burst it does not have, and merges any field into one it has', () => {
+    const set = { type: 'restpause', w: 60, r: 8, clusters: [{ r: 4, restSec: 15 }] }
+    expect(setClusterAt(set, 2, { r: 1 })).toBe(set)
+    expect(setClusterAt(set, -1, { r: 1 })).toBe(set)
+    expect(setClusterAt({ w: 60 }, 0, { r: 1 })).toEqual({ w: 60 })
+    expect(setClusterAt(set, 0, { restSec: 20, note: 'x' }).clusters).toEqual([{ r: 4, restSec: 20, note: 'x' }])
+    expect(setDropAt(null, 0, { w: 1 })).toBe(null)
   })
 })
 
@@ -367,5 +401,43 @@ describe('addSideCluster / removeSideClusterAt / setSideClusterAt', () => {
     expect(s.sides.L.clusters).toEqual([])
     expect(s.sides.L.r).toBe(8)                        // back to the base
     expect(s.type).toBeUndefined()
+  })
+
+  it('seeds a later burst from the side\'s last burst, and a side with no reps from 1', () => {
+    let s = addSideCluster(makeSideSet({ w: 20, r: 16 }), 15) // r 12, burst 4
+    s = addSideCluster(s, 20)                          // nextBurstReps(4) = 2
+    expect(s.sides.L.clusters).toEqual([{ r: 4, restSec: 15 }, { r: 2, restSec: 20 }])
+    expect(s.sides.L.r).toBe(14)
+    const empty = addSideCluster(makeSideSet({ w: 20 }), 15)
+    expect(empty.sides.L).toMatchObject({ r: 1, clusters: [{ r: 1, restSec: 15 }] })
+  })
+
+  it('never takes a side below 0 reps', () => {
+    let s = addSideCluster(makeSideSet({ w: 20, r: 16 }), 15) // r 12, burst 4
+    expect(setSideClusterAt(s, 'L', 0, -20).sides.L.r).toBe(0) // 12 + (-20 - 4)
+    s = setSideField(s, 'L', 'r', 2)                   // L logged fewer reps than its burst
+    const removed = removeSideClusterAt(s, 0)
+    expect(removed.sides.L.r).toBe(0)                  // 2 - 4
+    expect(removed.sides.R.r).toBe(8)
+  })
+
+  it('touches no burst for an index outside the list', () => {
+    const s = addSideCluster(makeSideSet({ w: 20, r: 16 }), 15)
+    expect(removeSideClusterAt(s, 3)).toEqual(s)
+    expect(setSideClusterAt(s, 'R', 2, 3).sides.R.clusters).toEqual([{ r: 4, restSec: 15 }])
+    const d = addSideDrop(makeSideSet({ w: 20, r: 16 }), 20)
+    expect(removeSideDropAt(d, 1)).toEqual(d)
+    expect(setSideDropAt(d, 'R', 4, { w: 1 })).toEqual(d)
+  })
+
+  it('leaves a row that is not per-side, or a side other than L and R, as it was', () => {
+    const row = { w: 20, r: 8 }
+    for (const next of [
+      addSideCluster(row, 15), removeSideClusterAt(row, 0), setSideClusterAt(row, 'L', 0, 3),
+      removeSideDropAt(row, 0), setSideDropAt(row, 'L', 0, { w: 1 }),
+    ]) expect(next).toEqual(row)
+    const s = addSideCluster(makeSideSet({ w: 20, r: 16 }), 15)
+    expect(setSideClusterAt(s, 'X', 0, 9)).toEqual(s)
+    expect(setSideDropAt(s, undefined, 0, { w: 1 })).toEqual(s)
   })
 })
