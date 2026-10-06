@@ -73,5 +73,6 @@ export default defineConfig({
       '/gif': { target: media, changeOrigin: true }
     }
   },
+  test: { setupFiles: process.env.RECORD_FIXTURES === '1' ? ['./src/test-support/record-fixtures.js'] : [] },
   build: { chunkSizeWarningLimit: 1500 }
 })
