@@ -23,11 +23,17 @@ private func roundTrip(_ text: String) throws -> String {
         #expect(o["a"] == .number(3))
     }
 
-    @Test func removingThenSettingAppends() {
-        var o = JSONObject([("a", .number(1)), ("b", .number(2))])
-        o["a"] = nil
-        o["a"] = .number(3)
-        #expect(o.keys == ["b", "a"])
+    @Test(arguments: [2, 8, 9, 40])
+    func removingThenSettingAppends(size: Int) {
+        var o = JSONObject((0..<size).map { ("k\($0)", JSONValue.number(Double($0))) })
+        o["k0"] = nil
+        #expect(o["k0"] == nil)
+        #expect(o["k\(size - 1)"] == .number(Double(size - 1)))
+        o["k1"] = .number(-1)
+        o["k0"] = .number(99)
+        #expect(o.keys == (1..<size).map { "k\($0)" } + ["k0"])
+        #expect(o["k1"] == .number(-1))
+        #expect(o.count == size)
     }
 
     @Test(arguments: [

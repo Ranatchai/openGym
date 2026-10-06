@@ -44,7 +44,18 @@ public enum JSONSerializer {
 
     static func writeString(_ s: String, into out: inout [UInt8]) {
         out.append(UInt8(ascii: "\""))
-        for byte in s.utf8 { writeByte(byte, into: &out) }
+        var s = s
+        s.withUTF8 { bytes in
+            var runStart = 0
+            for i in 0..<bytes.count {
+                let byte = bytes[i]
+                if byte >= 0x20, byte != 0x22, byte != 0x5C { continue }
+                out.append(contentsOf: UnsafeBufferPointer(rebasing: bytes[runStart..<i]))
+                writeByte(byte, into: &out)
+                runStart = i + 1
+            }
+            out.append(contentsOf: UnsafeBufferPointer(rebasing: bytes[runStart...]))
+        }
         out.append(UInt8(ascii: "\""))
     }
 
@@ -151,13 +162,16 @@ public enum JSONSerializer {
             out.append(UInt8(ascii: "0"))
             return
         }
-        var digits: [UInt8] = []
-        var v = value
-        while v > 0 {
-            digits.append(UInt8(ascii: "0") + UInt8(v % 10))
-            v /= 10
+        withUnsafeTemporaryAllocation(of: UInt8.self, capacity: 20) { digits in
+            var end = 20
+            var v = value
+            while v > 0 {
+                end -= 1
+                digits[end] = UInt8(ascii: "0") + UInt8(v % 10)
+                v /= 10
+            }
+            out.append(contentsOf: UnsafeBufferPointer(rebasing: digits[end...]))
         }
-        out.append(contentsOf: digits.reversed())
     }
 
     /// The shortest round-trip decimal digits of a positive finite double, without leading or
