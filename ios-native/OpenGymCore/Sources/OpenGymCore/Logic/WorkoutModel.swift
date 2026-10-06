@@ -11,10 +11,22 @@ public enum SetType: String, Sendable {
 
 public enum SetMode: String, Sendable, CaseIterable {
     case reps, time, cardio
+
+    public init?(_ token: JSONKey) {
+        guard let mode = SetMode.allCases.first(where: { JSONKey($0.rawValue) == token }) else { return nil }
+        self = mode
+    }
 }
 
-public enum Side: String, Sendable {
+public enum Side: String, Sendable, CaseIterable {
     case L, R
+
+    /// `'L'` or `'R'` exactly; anything else is no side.
+    public init?(_ value: JSONValue?) {
+        guard case .string(let s) = value,
+              let side = Side.allCases.first(where: { JSONKey($0.rawValue) == JSONKey(s) }) else { return nil }
+        self = side
+    }
 }
 
 /// What a drop's weight snaps to: the nearest 0.5, a positive weight step, or a function that
@@ -318,7 +330,7 @@ public enum WorkoutModel {
     public static func setSideField(_ row: JSONValue?, _ side: Side?, _ field: String, _ value: JSONValue?) -> JSONValue {
         patchSide(row, side) { cur in
             var cur = cur
-            if isNullish(value), field == "rir" || field == "rpe" {
+            if isNullish(value), JSONKey(field) == "rir" || JSONKey(field) == "rpe" {
                 cur.remove(field)
             } else {
                 cur[field] = value
@@ -420,7 +432,7 @@ public enum WorkoutModel {
     // MARK: Modes
 
     public static func normalizeMode(_ value: JSONValue?, fallback: SetMode = .reps) -> SetMode {
-        SetMode(rawValue: JS.token(value)) ?? fallback
+        SetMode(JS.token(value)) ?? fallback
     }
 
     static func modeFromUnit(_ value: JSONValue?) -> SetMode? {
@@ -434,14 +446,14 @@ public enum WorkoutModel {
 
     static func explicitMode(_ source: JSONValue?) -> SetMode? {
         let value = objectOf(source)
-        return SetMode(rawValue: JS.token(value["mode"])) ?? modeFromUnit(value["unit"])
+        return SetMode(JS.token(value["mode"])) ?? modeFromUnit(value["unit"])
     }
 
     static func inferredMode(_ source: JSONValue?) -> SetMode? {
         let value = objectOf(source)
         if let explicit = explicitMode(.object(value)) { return explicit }
         let mode = value["mode"]
-        if JS.trimmedLowercase(JS.isTruthy(mode) ? JS.toString(mode) : "") == "amrap" { return .reps }
+        if JSONKey(JS.trimmedLowercase(JS.isTruthy(mode) ? JS.toString(mode) : "")) == "amrap" { return .reps }
         let has = { (key: String) in !isNullish(value[key]) }
         if has("min") || has("speed") { return .cardio }
         if has("sec") || has("seconds") || has("durationSec") { return .time }

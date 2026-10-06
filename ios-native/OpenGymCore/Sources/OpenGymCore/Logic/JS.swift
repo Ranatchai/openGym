@@ -113,9 +113,9 @@ public enum JS {
     }
 
     /// `typeof value === 'string' ? value.trim().toLowerCase() : ''`.
-    public static func token(_ value: JSONValue?) -> String {
+    public static func token(_ value: JSONValue?) -> JSONKey {
         guard case .string(let s) = value else { return "" }
-        return trimmedLowercase(s)
+        return JSONKey(trimmedLowercase(s))
     }
 
     /// `s.trim().toLowerCase()`.

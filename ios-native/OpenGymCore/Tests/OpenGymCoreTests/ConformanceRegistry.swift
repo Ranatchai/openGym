@@ -47,10 +47,7 @@ struct Args {
         return s
     }
 
-    func side(_ i: Int) -> Side? {
-        guard case .string(let s) = self[i] else { return nil }
-        return Side(rawValue: s)
-    }
+    func side(_ i: Int) -> Side? { Side(self[i]) }
 
     /// `grid` as nextDropWeight reads it: a function snaps, a positive number steps.
     func grid(_ i: Int) -> DropGrid {
@@ -65,7 +62,7 @@ struct Args {
 
     func mode(_ i: Int) -> SetMode {
         guard case .string(let s) = self[i] else { return .reps }
-        return SetMode(rawValue: s) ?? .reps
+        return SetMode(JSONKey(s)) ?? .reps
     }
 }
 
