@@ -20,7 +20,12 @@ final class Replay {
             return .nan
         }
         defer { used += 1 }
-        return JS.toNumber((try? FixtureValue.decodeArgOrResult(calls[used].result)) ?? nil)
+        do {
+            return JS.toNumber(try FixtureValue.decodeArgOrResult(calls[used].result))
+        } catch {
+            misses.append("callback result \(used + 1) is not representable in Swift: \(error)")
+            return .nan
+        }
     }
 }
 

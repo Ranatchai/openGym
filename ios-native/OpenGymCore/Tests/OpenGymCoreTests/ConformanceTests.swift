@@ -10,6 +10,13 @@ import OpenGymCore
     @Test func testRepRange() throws {
         try checkConformance(module: "rep-range")
     }
+
+    @Test func callbackResultSwiftCannotDecodeFailsTheCall() throws {
+        let record = try JSONParser.parse(#"{"fn":"nextDropWeight","args":[100,20,{"$js":"function","calls":[{"args":[80],"result":[{"$js":"undefined"}]}]}],"result":80}"#)
+        let port = try #require(ConformanceRegistry.modules["workout-model"]?["nextDropWeight"])
+        let problem = mismatch(port, try #require(record.objectValue))
+        #expect(problem?.hasPrefix("callback result 1 is not representable in Swift") == true, "\(problem ?? "nil")")
+    }
 }
 
 private let reportedPerFunction = 5
@@ -61,7 +68,7 @@ func checkConformance(module: String) throws {
     #expect(total == calls.count && !calls.isEmpty)
 }
 
-private func mismatch(_ port: Port, _ record: JSONObject) -> String? {
+func mismatch(_ port: Port, _ record: JSONObject) -> String? {
     let args: Args
     do {
         args = try FixtureValue.args(record["args"] ?? .null)
