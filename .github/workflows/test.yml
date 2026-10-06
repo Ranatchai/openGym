@@ -11,6 +11,7 @@ on:
       - 'scripts/build-coach-assets.mjs'
       - 'scripts/build-coach-library.mjs'
       - 'api/coach/prompts/**'
+      - 'ios-native/**'
       - '.github/workflows/test.yml'
   push:
     branches: [main, coach]
@@ -21,6 +22,7 @@ on:
       - 'scripts/build-coach-assets.mjs'
       - 'scripts/build-coach-library.mjs'
       - 'api/coach/prompts/**'
+      - 'ios-native/**'
       - '.github/workflows/test.yml'
   workflow_dispatch:
 
@@ -173,3 +175,18 @@ jobs:
           # canDropPrivileges() fails closed, so a missing `coach` user disables every job —
           # including the fixture provider. Cheaper to assert here than to discover on an instance.
           docker run --rm opengym-api:default id coach
+
+  swift-core:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: swift --version
+      - name: generated fixtures are committed and current
+        run: sh ios-native/tools/check-corpus.sh
+      - run: sh ios-native/tools/check-corpus.test.sh
+      - run: node --test ios-native/tools/gen-json-corpus.test.mjs
+      - run: swift test
+        working-directory: ios-native/OpenGymCore

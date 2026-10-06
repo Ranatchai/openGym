@@ -1,0 +1,1 @@
+[{"id":"push","name":"push","ex":[{"id":"bench","sets":3,"reps":12}],"_ts":1000},{"id":"pull","name":"pull","ex":[{"id":"bench","sets":3,"reps":8}],"_ts":6},{"id":"core","name":"core","ex":[{"id":"bench","sets":3,"reps":20}],"_ts":1000}]
