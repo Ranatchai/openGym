@@ -34,15 +34,10 @@ public enum JSONValue: Equatable, Sendable {
 public struct JSONKey: Hashable, Sendable, ExpressibleByStringInterpolation, CustomStringConvertible {
     enum Storage: Sendable {
         case string(String)
-        /// Only when the units contain an unpaired surrogate; valid UTF-16 is always `.string`.
         case utf16([UInt16])
     }
 
     let storage: Storage
-
-    init(storage: Storage) {
-        self.storage = storage
-    }
 
     public init(_ string: String) {
         storage = .string(string)

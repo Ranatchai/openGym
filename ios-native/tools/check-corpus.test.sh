@@ -1,5 +1,4 @@
 #!/bin/sh
-# The corpus gate must pass on a clean tree and fail when a fixture file exists that git does not track.
 set -eu
 cd "$(dirname "$0")/../.."
 probe=ios-native/OpenGymCore/Tests/OpenGymCoreTests/Fixtures/untracked-probe.json

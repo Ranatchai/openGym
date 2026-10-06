@@ -97,7 +97,7 @@ private struct Parser {
             let key: JSONKey
             switch try parseString() {
             case .string(let s): key = JSONKey(s)
-            case .utf16String(let units): key = JSONKey(storage: .utf16(units))
+            case .utf16String(let units): key = JSONKey(utf16: units)
             default: throw unexpected()
             }
             skipWhitespace()
