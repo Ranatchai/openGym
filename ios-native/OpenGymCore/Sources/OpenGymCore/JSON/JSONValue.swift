@@ -76,10 +76,7 @@ public struct JSONObject: Equatable, Sendable {
         var result: [(key: String, value: JSONValue)] = []
         result.reserveCapacity(entries.count)
         for (_, i) in indexed { result.append(entries[i]) }
-        for (i, entry) in entries.enumerated() where JSONObject.arrayIndex(entry.key) == nil {
-            _ = i
-            result.append(entry)
-        }
+        for entry in entries where JSONObject.arrayIndex(entry.key) == nil { result.append(entry) }
         return result
     }
 

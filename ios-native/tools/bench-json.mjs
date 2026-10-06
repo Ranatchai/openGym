@@ -15,7 +15,7 @@ const once = () => {
   const t1 = performance.now()
   const out = JSON.stringify(v)
   const t2 = performance.now()
-  return { parseMs: t1 - t0, stringifyMs: t2 - t1, totalMs: t2 - t0, matches: Buffer.byteLength(out) === buf.length }
+  return { parseMs: t1 - t0, stringifyMs: t2 - t1, totalMs: t2 - t0, matches: Buffer.compare(Buffer.from(out, 'utf8'), buf) === 0 }
 }
 
 once()

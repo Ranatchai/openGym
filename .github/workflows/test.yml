@@ -11,6 +11,7 @@ on:
       - 'scripts/build-coach-assets.mjs'
       - 'scripts/build-coach-library.mjs'
       - 'api/coach/prompts/**'
+      - 'ios-native/**'
       - '.github/workflows/test.yml'
   push:
     branches: [main, coach]
@@ -21,6 +22,7 @@ on:
       - 'scripts/build-coach-assets.mjs'
       - 'scripts/build-coach-library.mjs'
       - 'api/coach/prompts/**'
+      - 'ios-native/**'
       - '.github/workflows/test.yml'
   workflow_dispatch:
 
@@ -173,3 +175,20 @@ jobs:
           # canDropPrivileges() fails closed, so a missing `coach` user disables every job —
           # including the fixture provider. Cheaper to assert here than to discover on an instance.
           docker run --rm opengym-api:default id coach
+
+  # The native iOS core must read and write the web app's state byte for byte. The corpus of
+  # input/expected pairs is generated from the JS side (JSON.parse + JSON.stringify), committed,
+  # and regenerated here: a JS-side change that moves a byte fails the diff before the Swift
+  # tests run, and a Swift change that moves a byte fails the tests.
+  swift-core:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: swift --version
+      - run: node ios-native/tools/gen-json-corpus.mjs
+      - run: git diff --exit-code --stat -- ios-native/OpenGymCore/Tests/OpenGymCoreTests/Fixtures
+      - run: swift test
+        working-directory: ios-native/OpenGymCore
