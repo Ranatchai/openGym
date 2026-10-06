@@ -41,3 +41,67 @@ test('a test that fails only under the recorder fails the generator by name and 
     fs.rmSync(unrelated, { force: true })
   }
 })
+
+function runWithScratch(files) {
+  const before = fixtureBytes()
+  try {
+    for (const [name, lines] of Object.entries(files)) fs.writeFileSync(path.join(LIB, name), [...lines, ''].join('\n'))
+    const run = spawnSync('node', [GENERATOR, 'failopen-scratch'], { encoding: 'utf8' })
+    const after = fixtureBytes()
+    return { run, rewritten: Object.keys(before).filter(file => after[file] !== before[file]) }
+  } finally {
+    for (const name of Object.keys(files)) fs.rmSync(path.join(LIB, name), { force: true })
+    for (const [file, text] of Object.entries(before)) fs.writeFileSync(path.join(FIXTURES, file), text)
+  }
+}
+
+test('a file that fails under the recorder before its first recorded call fails the generator by name', () => {
+  const { run, rewritten } = runWithScratch({
+    'rep-range.failopen-scratch.test.js': [
+      "import { it, expect } from 'vitest'",
+      "import { normalizeRepRange } from './rep-range.js'",
+      "it('fails under the recorder before its first recorded call', () => {",
+      '  expect(process.env.RECORD_FIXTURES).toBeUndefined()',
+      '  expect(normalizeRepRange(12345, 6)).toBeDefined()',
+      '})',
+    ],
+  })
+  assert.equal(run.status, 1)
+  assert.match(run.stderr, /frontend\/src\/lib\/rep-range\.failopen-scratch\.test\.js > fails under the recorder before its first recorded call/)
+  assert.deepEqual(rewritten, [])
+})
+
+test('a file that reaches a recorded module through another module and fails at import fails the generator by name', () => {
+  const { run, rewritten } = runWithScratch({
+    'via.failopen-scratch.js': ["export { normalizeRepRange } from './rep-range.js'"],
+    'import.failopen-scratch.test.js': [
+      "import { it } from 'vitest'",
+      "import { normalizeRepRange } from './via.failopen-scratch.js'",
+      "if (process.env.RECORD_FIXTURES) throw new Error('import fails under the recorder')",
+      "it('records a call', () => { normalizeRepRange(12345, 6) })",
+    ],
+  })
+  assert.equal(run.status, 1)
+  assert.match(run.stderr, /frontend\/src\/lib\/import\.failopen-scratch\.test\.js > /)
+  assert.deepEqual(rewritten, [])
+})
+
+test('an unhandled error fails the generator even when an unrelated test also fails', () => {
+  const { run, rewritten } = runWithScratch({
+    'rep-range.failopen-scratch.test.js': [
+      "import { it } from 'vitest'",
+      "import { normalizeRepRange } from './rep-range.js'",
+      "it('records a call, then throws outside the test', () => {",
+      '  normalizeRepRange(8, 6)',
+      "  setTimeout(() => { throw new Error('thrown outside any test') }, 0)",
+      '})',
+    ],
+    'unrelated.failopen-scratch.test.js': [
+      "import { it, expect } from 'vitest'",
+      "it('fails without calling a recorded module', () => { expect(1).toBe(2) })",
+    ],
+  })
+  assert.equal(run.status, 1)
+  assert.match(run.stderr, /gen-fixtures: [^\n]*unhandled[^\n]*\n[^\n]*thrown outside any test/)
+  assert.deepEqual(rewritten, [])
+})
