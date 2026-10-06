@@ -8,20 +8,18 @@ import { wrapExport } from './recorder.js'
 const out = process.env.RECORD_FIXTURES_OUT
 if (!out) throw new Error('RECORD_FIXTURES_OUT must name the directory the recorder writes to')
 
-// Tests that build data from today's date (the demo profile) record different calls each day,
-// so the clock starts at a fixed instant. It still ticks: tests that wait on Date.now() break
-// on a frozen one.
 const RealDate = Date
-const offset = RealDate.parse('2026-10-05T12:00:00Z') - RealDate.now()
-function ShiftedDate(...args) {
+const RECORDING_START = '2026-10-05T12:00:00Z'
+const offset = RealDate.parse(RECORDING_START) - RealDate.now()
+function DateTickingFromRecordingStart(...args) {
   if (!new.target) return new RealDate(RealDate.now() + offset).toString()
   return Reflect.construct(RealDate, args.length ? args : [RealDate.now() + offset], new.target)
 }
-ShiftedDate.prototype = RealDate.prototype
-ShiftedDate.now = () => RealDate.now() + offset
-ShiftedDate.parse = RealDate.parse
-ShiftedDate.UTC = RealDate.UTC
-globalThis.Date = ShiftedDate
+DateTickingFromRecordingStart.prototype = RealDate.prototype
+DateTickingFromRecordingStart.now = () => RealDate.now() + offset
+DateTickingFromRecordingStart.parse = RealDate.parse
+DateTickingFromRecordingStart.UTC = RealDate.UTC
+globalThis.Date = DateTickingFromRecordingStart
 
 const testFile = expect.getState().testPath
 const recorded = {}

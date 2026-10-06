@@ -404,8 +404,8 @@ describe('addSideCluster / removeSideClusterAt / setSideClusterAt', () => {
   })
 
   it('seeds a later burst from the side\'s last burst, and a side with no reps from 1', () => {
-    let s = addSideCluster(makeSideSet({ w: 20, r: 16 }), 15) // r 12, burst 4
-    s = addSideCluster(s, 20)                          // nextBurstReps(4) = 2
+    let s = addSideCluster(makeSideSet({ w: 20, r: 16 }), 15)
+    s = addSideCluster(s, 20)
     expect(s.sides.L.clusters).toEqual([{ r: 4, restSec: 15 }, { r: 2, restSec: 20 }])
     expect(s.sides.L.r).toBe(14)
     const empty = addSideCluster(makeSideSet({ w: 20 }), 15)
@@ -413,11 +413,11 @@ describe('addSideCluster / removeSideClusterAt / setSideClusterAt', () => {
   })
 
   it('never takes a side below 0 reps', () => {
-    let s = addSideCluster(makeSideSet({ w: 20, r: 16 }), 15) // r 12, burst 4
-    expect(setSideClusterAt(s, 'L', 0, -20).sides.L.r).toBe(0) // 12 + (-20 - 4)
-    s = setSideField(s, 'L', 'r', 2)                   // L logged fewer reps than its burst
+    let s = addSideCluster(makeSideSet({ w: 20, r: 16 }), 15)
+    expect(setSideClusterAt(s, 'L', 0, -20).sides.L.r).toBe(0)
+    s = setSideField(s, 'L', 'r', 2)
     const removed = removeSideClusterAt(s, 0)
-    expect(removed.sides.L.r).toBe(0)                  // 2 - 4
+    expect(removed.sides.L.r).toBe(0)
     expect(removed.sides.R.r).toBe(8)
   })
 
