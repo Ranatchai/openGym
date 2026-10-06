@@ -3,7 +3,7 @@ import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation, useNavig
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { bindUI } from './components/ui.jsx'
-import { ACCENTS, setWeightDecimals } from './lib/format.js'
+import { accentKey, setWeightDecimals } from './lib/format.js'
 import { setLang, useLang, baseLang } from './lib/i18n.js'
 import { effectiveLang } from './lib/default-lang.js'
 import { setPlayOnSilent, setVibrate } from './lib/sound.js'
@@ -13,7 +13,7 @@ import { useWakeLock } from './lib/wakelock.js'
 import { installViewportGuard } from './lib/viewport-guard.js'
 import { installChipDrag } from './lib/hchips.js'
 import { syncPushSubscription } from './lib/push.js'
-import { MOBILE } from './lib/mobile.js'
+import { MOBILE, setNativeAppearance } from './lib/mobile.js'
 import { exitWorkoutEdit, startFlow } from './sheets.jsx'
 import Icon from './components/Icon.jsx'
 import TabBar from './components/TabBar.jsx'
@@ -55,9 +55,11 @@ const resolveTheme = theme => theme === 'light' || theme === 'dark'
 function applyPrefs(theme, accent) {
   const de = document.documentElement
   de.dataset.theme = resolveTheme(theme)
-  de.dataset.accent = ACCENTS[accent] ? accent : 'lime'
+  de.dataset.accent = accentKey(accent)
+  // the Aura Matrix desk colour of each theme (aura.css)
   const meta = document.querySelector('meta[name="theme-color"]')
-  if (meta) meta.content = de.dataset.theme === 'light' ? '#f2f2f7' : '#000000'
+  if (meta) meta.content = de.dataset.theme === 'light' ? '#efeaf4' : '#15131c'
+  setNativeAppearance(theme === 'light' || theme === 'dark' ? theme : 'system')
 }
 
 function Shell() {

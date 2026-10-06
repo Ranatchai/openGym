@@ -1658,6 +1658,7 @@ export default {
   'Blue': 'Azul',
   'Orange': 'Laranja',
   'Purple': 'Roxo',
+  'Periwinkle': 'Azul-lavanda',
   'Pink': 'Rosa',
   'Red': 'Vermelho',
   'Teal': 'Turquesa',

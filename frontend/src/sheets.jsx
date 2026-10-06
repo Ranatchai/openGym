@@ -176,7 +176,7 @@ function StarterPlanChooser({ close }) {
       {starterPlanOptions().map(({ id, days }) => {
         const { name, about } = PLAN_COPY[id]()
         return <div key={id} className="item" {...tappable(() => choose(id, name))}>
-          <span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="sparkles" /></span>
+          <span className="lrow-i" style={{ '--tint': 'var(--surface-3)' }}><Icon name="sparkles" /></span>
           <div className="grow"><div className="tt">{name}</div><div className="ss">{t('{0} days per week', days)} · {about}</div></div>
           <Icon name="chevronRight" className="chev" />
         </div>
@@ -918,7 +918,7 @@ function AddToRoutine({ ex, close }) {
         <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
         {r.ex.some(e => e.id === ex.id) && <span className="tag">{t('already in')}</span>}<Icon name="plus" className="chev" />
       </div>)}
-      <div className="item" {...tappable(() => pick('_new'))}><span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="sparkles" /></span>
+      <div className="item" {...tappable(() => pick('_new'))}><span className="lrow-i" style={{ '--tint': 'var(--surface-3)' }}><Icon name="sparkles" /></span>
         <div className="grow"><div className="tt">{t('New routine')}</div><div className="ss">{t('Create one and start with this exercise')}</div></div><Icon name="plus" className="chev" /></div>
     </div>
   </>
@@ -1836,8 +1836,8 @@ function DayOverride({ iso, close }) {
         <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
         <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
         {effIds.includes(r.id) && <Icon name="check" className="accent" />}</div>)}
-      <div className="item" {...tappable(() => set('rest'))}><span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="moon" /></span><div className="grow"><div className="tt">{t('Rest / skip this day')}</div></div>{effIds.length === 0 && <Icon name="check" className="accent" />}</div>
-      {hasOvr && <div className="item" {...tappable(() => set(''))}><span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="reset" /></span><div className="grow"><div className="tt">{t('Back to weekly plan')}</div></div></div>}
+      <div className="item" {...tappable(() => set('rest'))}><span className="lrow-i" style={{ '--tint': 'var(--surface-3)' }}><Icon name="moon" /></span><div className="grow"><div className="tt">{t('Rest / skip this day')}</div></div>{effIds.length === 0 && <Icon name="check" className="accent" />}</div>
+      {hasOvr && <div className="item" {...tappable(() => set(''))}><span className="lrow-i" style={{ '--tint': 'var(--surface-3)' }}><Icon name="reset" /></span><div className="grow"><div className="tt">{t('Back to weekly plan')}</div></div></div>}
     </div>
   </>
 }
@@ -1853,7 +1853,7 @@ function DayAssign({ day, close }) {
   return <>
     <h3>{t(DAYN[day])}</h3>
     <div className="list">
-      <div className="item" {...tappable(() => set(''))}><span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="moon" /></span><div className="grow"><div className="tt">{t('Rest day')}</div></div>{!cur.length && <Icon name="check" className="accent" />}</div>
+      <div className="item" {...tappable(() => set(''))}><span className="lrow-i" style={{ '--tint': 'var(--surface-3)' }}><Icon name="moon" /></span><div className="grow"><div className="tt">{t('Rest day')}</div></div>{!cur.length && <Icon name="check" className="accent" />}</div>
       {st.routines.map(r => <div key={r.id} className="item" {...tappable(() => set(r.id))}>
         <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
         <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>

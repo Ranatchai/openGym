@@ -1658,6 +1658,7 @@ export default {
   'Blue': 'Mavi',
   'Orange': 'Turuncu',
   'Purple': 'Mor',
+  'Periwinkle': 'Lavanta mavisi',
   'Pink': 'Pembe',
   'Red': 'Kırmızı',
   'Teal': 'Turkuaz',

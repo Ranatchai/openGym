@@ -1678,6 +1678,7 @@ export default {
   'Blue': 'Blau',
   'Orange': 'Orange',
   'Purple': 'Lila',
+  'Periwinkle': 'Lavendelblau',
   'Pink': 'Pink',
   'Red': 'Rot',
   'Teal': 'Türkis',

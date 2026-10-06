@@ -91,10 +91,10 @@ describe('the rest alert in the Android app', () => {
     }))
     const alert = await import('./rest-alert.js')
     const at = Date.now() + 90_000
-    await alert.armRestAlert(at, { totalSec: 90, accent: 'red', sound: false })
+    await alert.armRestAlert(at, { totalSec: 90, accent: 'sky', sound: false })
     expect(schedule).toHaveBeenCalledWith(expect.objectContaining({
       at, totalMs: 90_000, sound: false, title: 'Rest over — next set!', pause: 'Pause', resume: 'Resume', skip: 'Skip',
-      accent: (0xff000000 | 0xff453a) >>> 0, ink: 0xffffffff,
+      accent: (0xff000000 | 0x40a8e8) >>> 0, ink: (0xff000000 | 0x1b4761) >>> 0,
     }))
   })
 
