@@ -214,6 +214,11 @@ addCase('strings', '{' + stringMembers.map(([k, v]) => `"${k}":${v}`).join(',') 
 const keyOrder = '"b":1,"20":2,"3":3,"a":4,"01":5,"0":6,"4294967295":7,"4294967294":8,"-1":9,"1.0":10,"":11'
 addCase('key-order', `{${keyOrder},"nested":{${keyOrder}}}`)
 addCase('duplicate-keys', '{"a":1,"b":2,"a":3,"1":4,"c":5,"1":6}')
+addCase('nfc-key-raw', '{"é":1,"é":2}')
+addCase('nfc-key-escaped', String.raw`{"\u00e9":1,"e\u0301":2}`)
+addCase('nfc-key-angstrom', '{"Å":1,"Å":2,"Å":3}')
+addCase('nfc-key-indexed', '{' + Array.from({ length: 20 }, (_, i) => `"k${i}":${i}`).join(',') + ',"é":1,"é":2}')
+addCase('surrogate-in-key', String.raw`{"\ud800":1,"\ud800":2,"\udc00":3,"\ud83d\ude00":4,"\ud83d":5}`)
 
 addCase('scalar-string', '"hello \\u00e9 ยก"')
 addCase('scalar-number', '-1.50E+3')
@@ -292,10 +297,6 @@ for (const [name, text] of Object.entries(malformed)) {
   put(`malformed/${name}.json`, text)
   counts.malformed++
 }
-const surrogateKey = String.raw`{"\ud800":1}`
-JSON.parse(surrogateKey)
-put('malformed/surrogate-in-key.json', surrogateKey)
-counts.malformed++
 
 fs.rmSync(OUT, { recursive: true, force: true })
 let totalBytes = 0

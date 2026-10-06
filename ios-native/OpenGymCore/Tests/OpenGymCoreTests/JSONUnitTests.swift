@@ -96,10 +96,51 @@ private func roundTrip(_ text: String) throws -> String {
         #expect(value == .utf16String([0xD83D]))
     }
 
-    @Test func rejectsSurrogateInKey() {
-        #expect(throws: JSONParseError(offset: 1, message: "unpaired surrogate in object key")) {
-            try JSONParser.parse(#"{"\ud800":1}"#)
-        }
+    @Test func loneSurrogateKeysParseLikeJSONParse() throws {
+        #expect(try roundTrip(#"{"\ud800":1}"#) == #"{"\ud800":1}"#)
+        #expect(try roundTrip(#"{"\ud800":1,"\ud800":2,"\udc00":3}"#) == #"{"\ud800":2,"\udc00":3}"#)
+    }
+
+    @Test func equalityIsByCodeUnitNotCanonicalEquivalence() {
+        let nfc = "\u{E9}"
+        let nfd = "e\u{301}"
+        #expect(nfc == nfd)
+        #expect(JSONValue.string(nfc) != .string(nfd))
+        #expect(JSONValue.string(nfc) == .string("\u{E9}"))
+        #expect(JSONValue.array([.string(nfc)]) != .array([.string(nfd)]))
+    }
+}
+
+@Suite struct CodeUnitKeyTests {
+    @Test(arguments: [0, 20])
+    func canonicallyEquivalentKeysStayDistinct(padding: Int) {
+        var o = JSONObject((0..<padding).map { ("k\($0)", JSONValue.number(Double($0))) })
+        o["\u{E9}"] = .number(1)
+        o["e\u{301}"] = .number(2)
+        o["\u{212B}"] = .number(3)
+        o["\u{C5}"] = .number(4)
+        #expect(o.count == padding + 4)
+        #expect(o["\u{E9}"] == .number(1))
+        #expect(o["e\u{301}"] == .number(2))
+        #expect(o["\u{212B}"] == .number(3))
+        #expect(o["\u{C5}"] == .number(4))
+        o["e\u{301}"] = nil
+        #expect(o.count == padding + 3)
+        #expect(o["\u{E9}"] == .number(1))
+        #expect(o["e\u{301}"] == nil)
+    }
+
+    @Test func objectsWithEquivalentButDifferentKeysAreNotEqual() {
+        #expect(JSONObject([("\u{E9}", .null)]) != JSONObject([("e\u{301}", .null)]))
+    }
+
+    @Test(arguments: [
+        (#"{"\#u{E9}":1,"e\#u{301}":2}"#, #"{"\#u{E9}":1,"e\#u{301}":2}"#),
+        (#"{"\u00e9":1,"e\u0301":2}"#, #"{"\#u{E9}":1,"e\#u{301}":2}"#),
+        (#"{"\#u{212B}":1,"\#u{C5}":2,"A\#u{30A}":3}"#, #"{"\#u{212B}":1,"\#u{C5}":2,"A\#u{30A}":3}"#),
+    ])
+    func parserKeepsCanonicallyEquivalentKeys(input: String, expected: String) throws {
+        #expect(try roundTrip(input) == expected)
     }
 
     @Test func rejectsInvalidUTF8AtItsOffset() {
