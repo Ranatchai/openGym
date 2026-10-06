@@ -1,9 +1,6 @@
 import Foundation
 import OpenGymCore
 
-/// stdin → parse → stringify → stdout. With `--unit kg|lb` or `--rest-sec N` the document goes
-/// through `StateDocument` and that field is set before writing. Exit 1 with the error on
-/// stderr when the input is not JSON.
 func run() -> Int32 {
     var arguments = Array(CommandLine.arguments.dropFirst())
     var unit: WeightUnit?

@@ -49,7 +49,6 @@ const largeIdx = process.argv.indexOf('--large')
 const largePath = largeIdx >= 0 ? process.argv[largeIdx + 1] : null
 if (largeIdx >= 0 && !largePath) throw new Error('--large needs a path')
 
-// Copied by hand from frontend/src/store/useStore.js:74-180 (that module imports zustand).
 const DEF = {
   unit: 'kg', restSec: 90, restPauseSec: 15, sound: true, soundOnSilent: false, timerFlash: false, timedSetOvertime: false, keepAwake: true, lang: 'en',
   theme: 'light', accent: 'orchid', body: 'male', targetW: null,
@@ -296,7 +295,6 @@ for (const [name, text] of Object.entries(malformed)) {
 const surrogateKey = String.raw`{"\ud800":1}`
 JSON.parse(surrogateKey)
 put('malformed/surrogate-in-key.json', surrogateKey)
-put('malformed/surrogate-in-key.note', 'JSON.parse accepts this; the Swift parser rejects a lone surrogate in an object key by design, since Swift String keys cannot hold one.\n')
 counts.malformed++
 
 fs.rmSync(OUT, { recursive: true, force: true })

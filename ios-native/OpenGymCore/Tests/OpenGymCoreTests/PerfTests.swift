@@ -2,9 +2,6 @@ import Foundation
 import Testing
 import OpenGymCore
 
-/// Parse+serialize wall time on the large state that `gen-json-corpus.mjs --large <path>`
-/// writes. Set `OPENGYM_LARGE_STATE` to that path; the suite is skipped without it.
-/// Run as `swift test -c release --filter Perf`.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["OPENGYM_LARGE_STATE"] != nil))
 struct PerfTests {
     @Test func largeStateRoundTrip() throws {

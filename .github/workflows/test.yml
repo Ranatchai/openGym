@@ -176,10 +176,6 @@ jobs:
           # including the fixture provider. Cheaper to assert here than to discover on an instance.
           docker run --rm opengym-api:default id coach
 
-  # The native iOS core must read and write the web app's state byte for byte. The corpus of
-  # input/expected pairs is generated from the JS side (JSON.parse + JSON.stringify), committed,
-  # and regenerated here: a JS-side change that moves a byte fails the diff before the Swift
-  # tests run, and a Swift change that moves a byte fails the tests.
   swift-core:
     runs-on: macos-26
     steps:
