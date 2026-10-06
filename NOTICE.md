@@ -126,16 +126,12 @@ the source files.
 
 ## Typefaces
 
-The app's look (Aura Matrix, `frontend/src/aura.css`) sets its text in three typefaces, shipped
-inside the app as WOFF2 files in `frontend/src/fonts/` so the iOS and Android apps have them
-offline. All three are licensed under the **SIL Open Font License 1.1**, which allows bundling
-them with software of any license; each licence text ships with the app in `frontend/public/licenses/`.
-
-| Typeface | Copyright | Licence |
-|---|---|---|
-| Geist | © 2024 The Geist Project Authors | [OFL-geist.txt](frontend/public/licenses/OFL-geist.txt) |
-| Geist Mono | © 2024 The Geist Project Authors | [OFL-geistmono.txt](frontend/public/licenses/OFL-geistmono.txt) |
-| Archivo | © 2020 The Archivo Project Authors | [OFL-archivo.txt](frontend/public/licenses/OFL-archivo.txt) |
+The screen titles are set in **Archivo** (© 2020 The Archivo Project Authors), shipped inside the
+app as WOFF2 files in `frontend/src/fonts/` so the iOS and Android apps have it offline. It is
+licensed under the **SIL Open Font License 1.1**, which allows bundling it with software of any
+license; the licence text ships with the app as
+[`frontend/public/licenses/OFL-archivo.txt`](frontend/public/licenses/OFL-archivo.txt). All other
+text uses the device's own system fonts.
 
 ## Gym check-in QR codes
 

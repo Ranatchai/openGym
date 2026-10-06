@@ -58,7 +58,7 @@ function applyPrefs(theme, accent) {
   de.dataset.accent = accentKey(accent)
   // the Aura Matrix desk colour of each theme (aura.css)
   const meta = document.querySelector('meta[name="theme-color"]')
-  if (meta) meta.content = de.dataset.theme === 'light' ? '#efeaf4' : '#15131c'
+  if (meta) meta.content = de.dataset.theme === 'light' ? '#f8f7fa' : '#0e0d12'
   setNativeAppearance(theme === 'light' || theme === 'dark' ? theme : 'system')
 }
 
