@@ -1,0 +1,40 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "web": {
+      "root": "frontend/",
+      "framework": "vite",
+      "installCommand": "npm ci",
+      "buildCommand": "VITE_IMG_BASE=https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@7455efae41b330c265e7cd4b78dfa848e7ce5ebd/images/ VITE_GIF_BASE=https://cdn.jsdelivr.net/gh/hasaneyldrm/exercises-dataset@7455efae41b330c265e7cd4b78dfa848e7ce5ebd/videos/ npm run build",
+      "outputDirectory": "dist",
+      "headers": [
+        {
+          "source": "/(.*)",
+          "headers": [
+            { "key": "X-Frame-Options", "value": "DENY" },
+            { "key": "X-Content-Type-Options", "value": "nosniff" },
+            { "key": "Referrer-Policy", "value": "same-origin" },
+            { "key": "Content-Security-Policy", "value": "frame-ancestors 'none'" }
+          ]
+        },
+        {
+          "source": "/",
+          "headers": [{ "key": "Cache-Control", "value": "no-cache, must-revalidate" }]
+        },
+        {
+          "source": "/(sw\\.js|index\\.html|manifest\\.json)",
+          "headers": [{ "key": "Cache-Control", "value": "no-cache, must-revalidate" }]
+        }
+      ]
+    },
+    "api": {
+      "root": "api/",
+      "entrypoint": "server.js",
+      "installCommand": "npm ci --omit=optional"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": { "service": "api" } },
+    { "source": "/(.*)", "destination": { "service": "web" } }
+  ]
+}

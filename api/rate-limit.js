@@ -54,6 +54,9 @@ function boundedMap(maxKeys, rank, keep = () => false) {
     },
     delete: k => m.delete(k),
     entries: () => m.entries(),
+    // The serverless deployment keeps the counts between invocations in the database
+    // (server.js, withStore): what one invocation leaves is what the next one starts from.
+    load(list) { m.clear(); for (const [k, v] of list || []) m.set(k, v); },
     get size() { return m.size; }
   };
 }
@@ -112,6 +115,8 @@ export function createBackoff({ free = 5, baseMs = MINUTE, maxMs = 60 * MINUTE, 
     sweep() {
       for (const [k, e] of map.entries()) if (!locked(e) && !fresh(e)) map.delete(k);
     },
+    dump: () => [...map.entries()],
+    load: list => map.load(list),
     get size() { return map.size; }
   };
 }
@@ -131,6 +136,8 @@ export function createWindow({ max = 60, windowMs = MINUTE, maxKeys = 10000, now
     sweep() {
       for (const [k, e] of map.entries()) if (now() - e.start >= windowMs) map.delete(k);
     },
+    dump: () => [...map.entries()],
+    load: list => map.load(list),
     get size() { return map.size; }
   };
 }

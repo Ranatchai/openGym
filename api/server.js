@@ -4,6 +4,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import https from 'node:https';
 import dns from 'node:dns';
 import net from 'node:net';
@@ -31,11 +32,24 @@ import {
 } from './passkeys-store.js';
 import { createDeviceLink, findDeviceLink, burnDeviceLink, dropDeviceLinks } from './device-link.js';
 import { createMediaStore, mediaLimits, mediaConfig, MediaError, HASH_RE } from './media.js';
+import { createSupabaseStore, isConflict, throttleDeltas } from './store-supabase.js';
+
+/* Serverless (Vercel + Supabase, docs/SELF_HOSTING_VERCEL.md). With both variables set, every
+   thing this file keeps in ./data or in memory between requests lives in Postgres instead
+   (store-supabase.js), and each request runs inside withStore() below. Without them nothing
+   here changes: same files, same Maps, same timers. */
+const SUPA = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+const STORE = SUPA ? createSupabaseStore({ url: process.env.SUPABASE_URL, key: process.env.SUPABASE_SERVICE_ROLE_KEY }) : null;
+// On Vercel the production hostname is known, so a deployment needs no RP_ID/ORIGIN of its own
+// unless it is served on a custom domain.
+const VERCEL_HOST = process.env.VERCEL_PROJECT_PRODUCTION_URL || '';
 
 const PORT = +(process.env.PORT || 3000);
-const DATA = process.env.DATA_DIR || '/data';
-const RP_ID = process.env.RP_ID || 'localhost';
-const ORIGIN = process.env.ORIGIN || 'http://localhost:8080';
+// A function's only writable directory. Nothing durable goes there; it is only what media.js and
+// the Coach modules expect to exist.
+const DATA = process.env.DATA_DIR || (SUPA ? path.join(os.tmpdir(), 'opengym') : '/data');
+const RP_ID = process.env.RP_ID || VERCEL_HOST || 'localhost';
+const ORIGIN = process.env.ORIGIN || (VERCEL_HOST ? 'https://' + VERCEL_HOST : 'http://localhost:8080');
 const RP_NAME = process.env.RP_NAME || 'openGym';
 // Admin dashboard (issue): admins are matched by uid; INVITE_ONLY gates new signups behind a
 // code the admin generates. Both default off so a fresh self-hosted instance stays open.
@@ -64,7 +78,14 @@ const DEFAULT_LANG = (() => {
 // Whether the address a request came from may be read from the headers a proxy sets. Only the
 // sign-in throttle asks (limitAddress below); the bundled compose file sets it, because the API
 // is reachable there only through the web container, which overwrites those headers.
-const TRUST_PROXY = /^(1|true|yes|on)$/i.test(process.env.TRUST_PROXY || '');
+// On Vercel the platform's edge is that proxy and always sets them, so it is on by default there.
+const TRUST_PROXY = /^(1|true|yes|on)$/i.test(process.env.TRUST_PROXY || (process.env.VERCEL ? '1' : ''));
+// Vercel's edge overwrites X-Real-IP with the caller, but passes a client's own CF-Connecting-IP
+// through untouched — so on Vercel only the header it sets is believed, never the Cloudflare one
+// the self-hosted precedence starts with (anyone could send it and count as anyone).
+const ON_VERCEL = !!process.env.VERCEL;
+const vercelClient = req => String(req.headers['x-real-ip'] || '').trim()
+  || String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
 // 90 days keeps someone who trains a few times a week permanently signed in without a stolen
 // cookie staying good for a year. Overridable because a family instance and one on the open
 // internet don't want the same number. Only affects cookies minted from now on — the expiry is
@@ -91,19 +112,55 @@ const lock = f => { try { fs.chmodSync(path.join(DATA, f), 0o600); } catch { /* 
 
 /* ---------- secret + db ---------- */
 const secretFile = path.join(DATA, 'secret');
-if (!fs.existsSync(secretFile)) fs.writeFileSync(secretFile, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
-const SECRET = fs.readFileSync(secretFile, 'utf8').trim();
+let SECRET;
+if (SUPA) {
+  // SESSION_SECRET when the operator set one; otherwise made on first boot and kept in the
+  // database, so every function instance signs and verifies with the same key.
+  SECRET = process.env.SESSION_SECRET || await STORE.kv.getOrCreate('secret', () => crypto.randomBytes(32).toString('hex'));
+} else {
+  if (!fs.existsSync(secretFile)) fs.writeFileSync(secretFile, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
+  SECRET = fs.readFileSync(secretFile, 'utf8').trim();
+}
 
 const dbFile = path.join(DATA, 'db.json');
 let db = { users: [], creds: [], subs: [], invites: [] };
-try { db = JSON.parse(fs.readFileSync(dbFile, 'utf8')); } catch {}
-db.subs = db.subs || [];
-db.invites = db.invites || [];
-db.deviceLinks = db.deviceLinks || [];   // unused one-time device links, hashed (device-link.js)
+if (SUPA) db = await STORE.loadDb();
+else try { db = JSON.parse(fs.readFileSync(dbFile, 'utf8')); } catch {}
+function dbDefaults() {
+  db.users = db.users || [];
+  db.creds = db.creds || [];
+  db.subs = db.subs || [];
+  db.invites = db.invites || [];
+  db.deviceLinks = db.deviceLinks || [];   // unused one-time device links, hashed (device-link.js)
+}
+dbDefaults();
 const isAdmin = user => !!user && (user.admin === true || ADMIN_UIDS.includes(user.id));
+
+/* Serverless: writes a request makes to the database. Each is queued in order and all of them
+   have landed before the request's answer leaves (withStore), so a client never acts on an
+   answer — a challenge id, a cookie — whose write is still in flight. Callers that were
+   synchronous against ./data (saveDb, audit, the challenge store) stay synchronous. */
+let writeChain = Promise.resolve();
+let writeErrors = [];
+function later(fn) {
+  writeChain = writeChain.then(fn).catch(e => { writeErrors.push(e); });
+}
+// Bookkeeping whose failure must not fail the request: the audit log ("a log that can't be
+// written must not break signing in"), live presence, housekeeping. Logged, not raised.
+function laterSoft(fn, what) {
+  writeChain = writeChain.then(fn).catch(e => { console.error(what + ' failed', e?.message || e); });
+}
+
 // 0600: db.json holds passkey credential material. It used to be covered by a blanket 0700 on
 // the whole directory; now that the directory stays traversable, the file carries its own mode.
-function saveDb() { atomicWrite(dbFile, JSON.stringify(db, null, 2), 0o600); }
+function saveDb() {
+  if (SUPA) {
+    const ops = STORE.takeDiff(db);    // what changed is decided now; the write follows
+    if (ops.length) later(() => STORE.applyDb(ops));
+    return;
+  }
+  atomicWrite(dbFile, JSON.stringify(db, null, 2), 0o600);
+}
 function atomicWrite(file, content, mode) {
   const tmp = file + '.tmp';
   fs.writeFileSync(tmp, content, mode ? { mode } : undefined);
@@ -125,6 +182,8 @@ const lastSyncOf = (u, S) => Math.max(S?._ts || 0, u?.lastPull || 0) || null;
 function readState(uid) {
   try { return JSON.parse(fs.readFileSync(stateFile(uid), 'utf8')); } catch { return null; }
 }
+// What the routes call: the file here, the database row when serverless. Always awaited.
+const loadState = uid => (SUPA ? STORE.readState(uid) : readState(uid));
 // An entry is an object a reader can dereference, and `records` is every entry of a stored
 // list. PUT /api/data drops the rest on the way in — a null workout, a routine that is a
 // number — and refuses a list that is not an array at all, but a file written before it did
@@ -139,8 +198,14 @@ const records = v => (Array.isArray(v) ? v.filter(record) : []);
 /* ---------- push notifications (Web Push / VAPID) ---------- */
 const vapidFile = path.join(DATA, 'vapid.json');
 let vapid;
-try { vapid = JSON.parse(fs.readFileSync(vapidFile, 'utf8')); }
-catch { vapid = webpush.generateVAPIDKeys(); fs.writeFileSync(vapidFile, JSON.stringify(vapid), { mode: 0o600 }); }
+if (SUPA) {
+  vapid = process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY
+    ? { publicKey: process.env.VAPID_PUBLIC_KEY, privateKey: process.env.VAPID_PRIVATE_KEY }
+    : await STORE.kv.getOrCreate('vapid', () => webpush.generateVAPIDKeys());
+} else {
+  try { vapid = JSON.parse(fs.readFileSync(vapidFile, 'utf8')); }
+  catch { vapid = webpush.generateVAPIDKeys(); fs.writeFileSync(vapidFile, JSON.stringify(vapid), { mode: 0o600 }); }
+}
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || (SECURE ? ORIGIN : 'mailto:admin@localhost');
 webpush.setVapidDetails(VAPID_SUBJECT, vapid.publicKey, vapid.privateKey);
 
@@ -298,8 +363,14 @@ async function sendPush(userId, payload, deviceId) {
 // In memory only — an API restart drops whatever is pending.
 const restTimers = new Map(); // `${userId}:${deviceId}` -> Timeout
 const restKey = (userId, deviceId) => `${userId}:${deviceId || ''}`;
+// Serverless: nothing outlives the request to hold a setTimeout, so the timer is a row that
+// pg_cron finds due and hands to POST /api/cron/tick (supabase/migrations, opengym_kick).
 function scheduleRestTimer(userId, deviceId, sec, lang) {
   const k = restKey(userId, deviceId);
+  if (SUPA) {
+    later(() => STORE.timers.schedule(k, userId, Date.now() + sec * 1000, { deviceId: deviceId || null, lang: lang || null }));
+    return;
+  }
   const t = restTimers.get(k);
   if (t) clearTimeout(t);
   restTimers.set(k, setTimeout(() => {
@@ -308,6 +379,10 @@ function scheduleRestTimer(userId, deviceId, sec, lang) {
   }, sec * 1000));
 }
 function cancelRestTimer(userId, deviceId) {
+  if (SUPA) {
+    later(() => (deviceId ? STORE.timers.cancel(restKey(userId, deviceId)) : STORE.timers.cancelUser(userId)));
+    return;
+  }
   // no device id: an older client — clear everything the account has pending, as it always did
   for (const [k, t] of restTimers) {
     if (deviceId ? k === restKey(userId, deviceId) : k.startsWith(userId + ':')) { clearTimeout(t); restTimers.delete(k); }
@@ -390,14 +465,17 @@ function readStateCached(uid) {
   while (stateCache.size > STATE_CACHE_MAX) stateCache.delete(stateCache.keys().next().value);
   return S;
 }
-setInterval(() => {
+// One pass over every subscribed profile. `stateOf` is the cached file read here and a batch
+// read from the database when serverless, where the pass runs once a minute from the cron tick.
+function reminderPass(stateOf) {
+  const sends = [];
   for (const user of db.users) {
     if (!db.subs.some(s => s.userId === user.id)) continue;
     // One user's state file is one user's problem: a shape this tick cannot read is logged and
     // skipped, not allowed to take the process — and everyone else's reminders — down with it.
     // PUT /api/data refuses the obvious shapes, but a file already on disk answers to nobody.
     try {
-      const S = readStateCached(user.id);
+      const S = stateOf(user.id);
       if (!S?.reminder?.on) continue;
       const now = userNow(S.reminder.tz || 'UTC');
       if (!now) continue;
@@ -411,14 +489,16 @@ setInterval(() => {
       console.log('reminder firing', user.id, rid);
       user.lastReminder = now.date;
       saveDb();
-      sendPush(user.id, dayReminderPush(S.lang, routine));
+      sends.push(sendPush(user.id, dayReminderPush(S.lang, routine)));
     } catch (e) {
       console.error('reminder tick', user.id, e);
     }
   }
+  return Promise.all(sends);
+}
 // Checked every 10s (not 60s) — ticks aren't aligned to the top of the minute, so a 60s
 // interval could sit on your target minute for up to 59s before noticing. 10s caps that at ~9s.
-}, REMINDER_TICK_MS).unref();
+if (!SUPA) setInterval(() => { reminderPass(readStateCached); }, REMINDER_TICK_MS).unref();
 
 /* ---------- sessions (signed cookie) ---------- */
 function sign(payload) {
@@ -576,12 +656,17 @@ function csrfOk(req, key) {
 // passkey on the owner's profile and a session for it, without using the code up, as often as
 // wanted, and past "sign out everywhere".
 const challenges = new Map(); // cid -> {kind, challenge, name?, uid?, exp}
+const CHALLENGE_TTL = 5 * 60000;
 function putChallenge(data) {
   const cid = crypto.randomBytes(16).toString('base64url');
-  challenges.set(cid, { ...data, exp: Date.now() + 5 * 60000 });
+  if (SUPA) later(() => STORE.eph.put('challenge', cid, data, CHALLENGE_TTL));
+  else challenges.set(cid, { ...data, exp: Date.now() + CHALLENGE_TTL });
   return cid;
 }
+// A value here, a promise when serverless. Callers await only the promise, so the file-backed
+// path keeps answering without yielding, as the throttle checks around it assume.
 function takeChallenge(cid) {
+  if (SUPA) return typeof cid === 'string' && cid ? STORE.eph.take('challenge', cid) : Promise.resolve(null);
   const c = challenges.get(cid);
   challenges.delete(cid);
   if (!c || c.exp < Date.now()) return null;
@@ -603,6 +688,11 @@ function makePairCode() {
   return code;
 }
 setInterval(() => { for (const [k, v] of pairings) if (v.exp < Date.now()) pairings.delete(k); }, 60000).unref();
+// Every unredeemed code of one account goes ("sign out everywhere", a new password, a reset).
+function dropPairings(uid) {
+  if (SUPA) { later(() => STORE.eph.delByUid('pair', uid)); return; }
+  for (const [k, v] of pairings) if (v.uid === uid) pairings.delete(k);
+}
 
 /* ---------- helpers ---------- */
 function json(res, code, obj, extraHeaders) {
@@ -674,6 +764,10 @@ function livePresence(uid) {
   return p;
 }
 setInterval(() => { for (const [k, v] of presence) if (Date.now() - v.updatedAt > PRESENCE_TTL) presence.delete(k); }, 30000).unref();
+function presenceDrop(uid) {
+  if (SUPA) laterSoft(() => STORE.eph.del('presence', uid), 'presence');
+  else presence.delete(uid);
+}
 
 /* ---------- audit log ---------- */
 // Who signed in, who tried and failed, and what an admin changed. One JSON object per line in
@@ -705,7 +799,7 @@ let auditCount = 0;
 // one source from another, not enough to point at a person.
 function clientIp(req) {
   if (AUDIT_IP === 'off') return null;
-  const raw = String(req.headers['cf-connecting-ip'] || '').trim()
+  const raw = (ON_VERCEL ? vercelClient(req) : '') || String(req.headers['cf-connecting-ip'] || '').trim()
     || String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()
     || String(req.headers['x-real-ip'] || '').trim()
     // Nothing in front at all: the socket peer is the client, and it cannot be forged. Behind
@@ -749,7 +843,8 @@ function compactAudit() {
 // Never throws: a log that can't be written must not break signing in.
 function audit(req, ev, f = {}) {
   if (!AUDIT_ON) return;
-  const rec = { id: ++auditSeq, ts: Date.now(), ev, ok: f.ok !== false };
+  // Serverless: the database numbers the rows (a bigserial — a clear leaves its gap there too).
+  const rec = { ...(SUPA ? {} : { id: ++auditSeq }), ts: Date.now(), ev, ok: f.ok !== false };
   if (f.user) { rec.uid = f.user.id; rec.name = String(f.user.name || '').slice(0, 40); }
   else {
     if (f.uid) rec.uid = f.uid;
@@ -761,12 +856,14 @@ function audit(req, ev, f = {}) {
   if (f.act) rec.act = String(f.act).slice(0, 40);
   const ip = clientIp(req);
   if (ip) rec.ip = ip;
+  // Retention is the cron tick's job there (opengym_audit_compact).
+  if (SUPA) { laterSoft(() => STORE.audit.append(rec), 'audit write'); return; }
   try { fs.appendFileSync(auditFile, JSON.stringify(rec) + '\n'); }
   catch (e) { return console.error('audit write failed', e.message); }
   // Amortized: a 5000-event cap rewrites the file once per ~1250 events.
   if (AUDIT_MAX && ++auditCount > AUDIT_MAX * 1.25) compactAudit();
 }
-if (AUDIT_ON) {
+if (AUDIT_ON && !SUPA) {
   compactAudit();                                // prune on boot, seed auditSeq/auditCount
   setInterval(compactAudit, 3600000).unref();    // honour AUDIT_DAYS on an idle instance too
 }
@@ -841,7 +938,8 @@ const THROTTLED = {
 function limitAddress(req) {
   const sock = String(req.socket?.remoteAddress || '');
   let raw = sock;
-  if (TRUST_PROXY) {
+  if (ON_VERCEL) raw = vercelClient(req) || sock;
+  else if (TRUST_PROXY) {
     const xff = String(req.headers['x-forwarded-for'] || '').split(',').map(v => v.trim()).filter(Boolean);
     raw = String(req.headers['cf-connecting-ip'] || '').trim() || xff[xff.length - 1]
       || String(req.headers['x-real-ip'] || '').trim() || sock;
@@ -968,7 +1066,7 @@ function setPassword(user, h) {
   user.pw = { h, set: new Date().toISOString() };
   delete user.pwReset;
   user.sv = sessionVersion(user) + 1;
-  for (const [k, v] of pairings) if (v.uid === user.id) pairings.delete(k);
+  dropPairings(user.id);
   dropDeviceLinks(db, user.id);
 }
 
@@ -978,7 +1076,7 @@ function setPassword(user, h) {
 // outlives "sign out everywhere". Same ceremony as /api/login/verify, and the credential has
 // to belong to this account.
 async function passkeyStepUp(user, body) {
-  const c = takeChallenge(body.cid);
+  let c = takeChallenge(body.cid); if (SUPA) c = await c;
   const cred = c?.kind === 'login' && db.creds.find(x => x.id === body.credential?.id && x.userId === user.id);
   if (!cred) return false;
   try {
@@ -1316,9 +1414,9 @@ const passwordRoutes = {
     delete u.pw;
     u.pwReset = { h: hashResetCode(code), exp: Date.now() + RESET_TTL_MS, by: admin.id };
     u.sv = sessionVersion(u) + 1;
-    for (const [k, v] of pairings) if (v.uid === u.id) pairings.delete(k);
+    dropPairings(u.id);
     dropDeviceLinks(db, u.id);
-    presence.delete(u.id);
+    presenceDrop(u.id);
     saveDb();
     audit(req, 'admin.password.reset', { user: admin, target: u });
     json(res, 200, { ok: true, name: u.name, code, expires: u.pwReset.exp });
@@ -1466,7 +1564,7 @@ const passkeyRoutes = {
     const user = readSession(req);
     if (!user) return notSignedIn(res);
     const body = await readBody(req);
-    const c = takeChallenge(text(body.cid));
+    let c = takeChallenge(text(body.cid)); if (SUPA) c = await c;
     if (!c || c.kind !== 'add' || c.uid !== user.id) {
       audit(req, 'auth.passkey.fail', { ok: false, user, msg: 'challenge-expired' });
       return json(res, 400, { error: 'challenge expired — try again' });
@@ -1573,7 +1671,7 @@ const passkeyRoutes = {
     const body = await readBody(req);
     if (addressPaused(req, res, 'link')) return;
     const code = text(body.code);
-    const c = takeChallenge(text(body.cid));
+    let c = takeChallenge(text(body.cid)); if (SUPA) c = await c;
     const link = findDeviceLink(db, code);
     if (!link) {
       strikeAddress(req, 'link');
@@ -1612,7 +1710,10 @@ const passkeyRoutes = {
 // The state only ever carries a small ref; the bytes arrive and leave through the routes below.
 // MEDIA_UPLOADS=0 takes the routes and the /api/config block away, but the store is created
 // either way: an admin deleting a profile must still remove files uploaded while it was on.
-const MEDIA_LIMITS = mediaLimits(process.env);
+// Serverless: off. An upload is up to 40 MB and a function takes a 4.5 MB body, and the store
+// is a directory a function does not keep. The app already reads the absence as "this server
+// does not store photos and videos" and keeps them on the device.
+const MEDIA_LIMITS = mediaLimits(SUPA ? { ...process.env, MEDIA_UPLOADS: '0' } : process.env);
 const MEDIA_ON = MEDIA_LIMITS.enabled;
 const MEDIA = createMediaStore({ dir: path.join(DATA, 'uploads'), limits: MEDIA_LIMITS, readState });
 // Leftovers of uploads the previous process was receiving when it stopped.
@@ -1728,6 +1829,48 @@ const mediaRoutes = {
   }
 };
 
+/* ---------- serverless: the cron tick ---------- */
+const CRON_SECRET = process.env.CRON_SECRET || '';
+function cronAuthorized(req) {
+  if (!CRON_SECRET) return false;
+  const got = Buffer.from(String(req.headers.authorization || ''));
+  const want = Buffer.from('Bearer ' + CRON_SECRET);
+  return got.length === want.length && crypto.timingSafeEqual(got, want);
+}
+async function cronTick(req, res) {
+  if (!cronAuthorized(req)) return json(res, 401, { error: 'not authorized' });
+  // pg_cron says which job called; Vercel Cron's GET is always the minute job.
+  const minute = req.method === 'GET' || !!(await readBody(req)).minute;
+  // Claimed in the database, so a timer fires once however many ticks overlap.
+  const due = await STORE.timers.claimDue();
+  await Promise.all(due.map(t => sendPush(t.uid, restTimerPush(t.payload?.lang), t.payload?.deviceId || undefined)));
+  if (minute) {
+    // First only the reminder settings; whole documents only for the few whose reminder is
+    // inside its window and not yet sent today. Reading every history every minute would be
+    // most of the database's egress.
+    const subscribed = db.users.filter(u => db.subs.some(s => s.userId === u.id));
+    const reminders = await STORE.readReminders(subscribed.map(u => u.id));
+    const due = subscribed.filter(u => {
+      const r = reminders.get(u.id);
+      const now = r && userNow(r.tz || 'UTC');
+      const late = now ? minutesLate(r.time, now) : NaN;
+      return late >= 0 && late <= REMINDER_WINDOW_MIN && u.lastReminder !== now.date;
+    }).map(u => u.id);
+    const states = await STORE.readStates(due);
+    await reminderPass(uid => states.get(uid) || null);
+    laterSoft(() => STORE.eph.sweep(), 'eph sweep');
+    if (AUDIT_ON) laterSoft(() => STORE.audit.compact(AUDIT_MAX, AUDIT_DAYS ? Date.now() - AUDIT_DAYS * 86400000 : 0), 'audit compact');
+    // The throttle's forgotten keys, which no request sweeps here (withStore saves deltas only).
+    const t = await STORE.throttle.load();
+    const lims = [['burst', AUTH_BURST], ['addr', ADDR_FAILS], ['acct', ACCOUNT_FAILS]];
+    for (const [k, l] of lims) l.load(JSON.parse(JSON.stringify(t[k])));
+    for (const [, l] of lims) l.sweep();
+    const ops = lims.flatMap(([k, l]) => throttleDeltas(k, t[k], l.dump()));
+    laterSoft(() => STORE.throttle.apply(ops), 'throttle sweep');
+  }
+  json(res, 200, { ok: true, fired: due.length });
+}
+
 /* ---------- routes ---------- */
 const routes = {
   'GET /api/health': async (req, res) => json(res, 200, { ok: true, users: db.users.length }),
@@ -1760,7 +1903,8 @@ const routes = {
       // Public like the two flags above: the caps are not a secret, and the absence of the
       // block is how the app knows this server does not take photos and videos at all.
       ...(MEDIA_ON ? { media: mediaConfig(MEDIA_LIMITS) } : {}),
-      ...(readSession(req) ? { coach: coachConfig.publicConfig() } : {})
+      // Serverless: no Coach (its jobs run for minutes and keep their files in ./data).
+      ...(readSession(req) ? { coach: SUPA ? null : coachConfig.publicConfig() } : {})
     });
   },
 
@@ -1803,7 +1947,7 @@ const routes = {
 
   'POST /api/register/verify': async (req, res) => {
     const body = await readBody(req);
-    const c = takeChallenge(body.cid);
+    let c = takeChallenge(body.cid); if (SUPA) c = await c;
     if (!c || c.kind !== 'register' || !c.uid) {
       audit(req, 'auth.register.fail', { ok: false, msg: 'challenge-expired' });
       return json(res, 400, { error: 'challenge expired — try again' });
@@ -1866,7 +2010,7 @@ const routes = {
 
   'POST /api/login/verify': async (req, res) => {
     const body = await readBody(req);
-    const c = takeChallenge(body.cid);
+    let c = takeChallenge(body.cid); if (SUPA) c = await c;
     if (c?.kind !== 'login') {
       audit(req, 'auth.login.fail', { ok: false, msg: 'challenge-expired' });
       return json(res, 400, { error: 'challenge expired — try again' });
@@ -1936,7 +2080,7 @@ const routes = {
     user.sv = sessionVersion(user) + 1;
     // An unredeemed pairing code is a session-in-waiting for this account; it goes too, and so
     // does an unused device link.
-    for (const [k, v] of pairings) if (v.uid === user.id) pairings.delete(k);
+    dropPairings(user.id);
     dropDeviceLinks(db, user.id);
     saveDb();
     audit(req, 'auth.logout.all', { user });
@@ -1949,7 +2093,9 @@ const routes = {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
     const code = makePairCode();
-    pairings.set(code, { uid: user.id, exp: Date.now() + 5 * 60000 });
+    // Serverless: 40 random bits that live five minutes; the uniqueness loop has no Map to ask.
+    if (SUPA) later(() => STORE.eph.put('pair', code, { uid: user.id }, 5 * 60000));
+    else pairings.set(code, { uid: user.id, exp: Date.now() + 5 * 60000 });
     audit(req, 'auth.pair.create', { user });
     json(res, 200, { code });
   },
@@ -1959,8 +2105,9 @@ const routes = {
   'POST /api/pair/redeem': async (req, res) => {
     const body = await readBody(req);
     const code = text(body.code).trim().toUpperCase();
-    const p = pairings.get(code);
-    if (p) pairings.delete(code);
+    let p;
+    if (SUPA) { p = code ? await STORE.eph.take('pair', code) : null; if (p) p.exp = Infinity; }
+    else { p = pairings.get(code); if (p) pairings.delete(code); }
     if (!p || p.exp < Date.now()) {
       audit(req, 'auth.pair.fail', { ok: false, msg: 'code-invalid' });
       return json(res, 400, { error: 'invalid or expired code' });
@@ -1986,7 +2133,7 @@ const routes = {
   'GET /api/data': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
-    const state = readState(user.id);
+    const state = SUPA ? await STORE.readState(user.id) : readState(user.id);
     notePull(user);
     json(res, 200, { state, rev: state?._rev || 0 });
   },
@@ -1999,7 +2146,7 @@ const routes = {
   'GET /api/data/rev': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
-    json(res, 200, { rev: readStateCached(user.id)?._rev || 0 });
+    json(res, 200, { rev: SUPA ? await STORE.readRev(user.id) : readStateCached(user.id)?._rev || 0 });
   },
 
   'PUT /api/data': async (req, res) => {
@@ -2036,26 +2183,35 @@ const routes = {
     // the client can merge and try again without a second request. No `baseRev` (a client from
     // before revisions, or a deliberate replace such as a backup import) overwrites, as before.
     // readState and atomicWrite are synchronous with nothing awaited between them, so the
-    // compare-and-write is atomic for this process.
-    const cur = readState(user.id);
-    const curRev = cur?._rev || 0;
-    if (body.baseRev != null && body.baseRev !== curRev) {
-      return json(res, 409, { error: 'conflict', rev: curRev, state: cur });
-    }
+    // compare-and-write is atomic for this process. Serverless, the database makes the same
+    // compare (opengym_state_write); a write that loses the race to another instance is a 409
+    // like any other, or, for a push without `baseRev`, simply tried again on the new document.
     delete body.state.active;              // in-progress workouts stay device-local
-    // "Reset everything" stamps the profile (`resetAt`, with `resetIds`: what it wiped). The stamp
-    // only moves forward: a write without it, or with an older one — a client from before it, a
-    // backup restored over the profile — keeps the stored stamp. Otherwise every device that saw
-    // the reset would take that copy for one older than the reset, and wipe it again on its next
-    // merge (frontend/src/lib/sync-merge.js).
-    const storedReset = Number(cur?.resetAt) || 0;
-    if (storedReset > (Number(body.state.resetAt) || 0)) {
-      body.state.resetAt = cur.resetAt;
-      if (cur.resetIds && typeof cur.resetIds === 'object') body.state.resetIds = cur.resetIds;
-      else delete body.state.resetIds;
+    for (let attempt = 0; ; attempt++) {
+      // Not awaited on the file path: a yield between this read and the write below would let
+      // another request's write land in between.
+      const cur = SUPA ? await STORE.readState(user.id) : readState(user.id);
+      const curRev = cur?._rev || 0;
+      if (body.baseRev != null && body.baseRev !== curRev) {
+        return json(res, 409, { error: 'conflict', rev: curRev, state: cur });
+      }
+      // "Reset everything" stamps the profile (`resetAt`, with `resetIds`: what it wiped). The stamp
+      // only moves forward: a write without it, or with an older one — a client from before it, a
+      // backup restored over the profile — keeps the stored stamp. Otherwise every device that saw
+      // the reset would take that copy for one older than the reset, and wipe it again on its next
+      // merge (frontend/src/lib/sync-merge.js).
+      const storedReset = Number(cur?.resetAt) || 0;
+      if (storedReset > (Number(body.state.resetAt) || 0)) {
+        body.state.resetAt = cur.resetAt;
+        if (cur.resetIds && typeof cur.resetIds === 'object') body.state.resetIds = cur.resetIds;
+        else delete body.state.resetIds;
+      }
+      body.state._rev = curRev + 1;          // server-owned; whatever the client sent is ignored
+      if (!SUPA) { atomicWrite(stateFile(user.id), JSON.stringify(body.state)); break; }
+      const w = await STORE.writeState(user.id, curRev, body.state);
+      if (w.ok) break;
+      if (body.baseRev != null || attempt >= 2) return json(res, 409, { error: 'conflict', rev: w.rev, state: w.state ?? null });
     }
-    body.state._rev = curRev + 1;          // server-owned; whatever the client sent is ignored
-    atomicWrite(stateFile(user.id), JSON.stringify(body.state));
     // The stat cache cannot see this write on its own: mtime granularity is 4 ms here (ext4 on
     // this kernel — 3901 of 3999 back-to-back same-size writes shared one timestamp), and a
     // `_rev` going from 7 to 8 does not change the file's size, so two writes inside one 4 ms
@@ -2126,7 +2282,7 @@ const routes = {
   'POST /api/push/test': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
-    await sendPush(user.id, testPush(readStateCached(user.id)?.lang));
+    await sendPush(user.id, testPush((SUPA ? await loadState(user.id) : readStateCached(user.id))?.lang));
     json(res, 200, { ok: true });
   },
 
@@ -2141,7 +2297,7 @@ const routes = {
     const n = typeof raw === 'number' || typeof raw === 'string' ? Number(raw) : NaN;
     if (!(n >= 1)) return json(res, 400, { error: 'seconds required' });
     const sec = Math.min(3600, Math.round(n));
-    scheduleRestTimer(user.id, deviceIdOf(body.deviceId), sec, readStateCached(user.id)?.lang);
+    scheduleRestTimer(user.id, deviceIdOf(body.deviceId), sec, (SUPA ? await loadState(user.id) : readStateCached(user.id))?.lang);
     json(res, 200, { ok: true });
   },
 
@@ -2159,14 +2315,16 @@ const routes = {
     if (!user) return json(res, 401, { error: 'not signed in' });
     const body = await readBody(req);
     if (body.active) {
-      presence.set(user.id, {
+      const p = {
         name: text(body.name).slice(0, 60),
         exIdx: +body.exIdx || 0, exTotal: +body.exTotal || 0,
         setsDone: +body.setsDone || 0, setsTotal: +body.setsTotal || 0,
         startedAt: +body.startedAt || Date.now(),
         updatedAt: Date.now()
-      });
-    } else presence.delete(user.id);
+      };
+      if (SUPA) laterSoft(() => STORE.eph.put('presence', user.id, p, PRESENCE_TTL), 'presence');
+      else presence.set(user.id, p);
+    } else presenceDrop(user.id);
     json(res, 200, { ok: true });
   },
 
@@ -2174,18 +2332,28 @@ const routes = {
   // One row per user, cheap enough for a personal instance (reads each state file once).
   'GET /api/admin/users': async (req, res) => {
     if (!requireAdmin(req, res)) return;
+    // Serverless: every state in one query, and who is training from the presence rows.
+    const sums = SUPA ? await STORE.stateSummaries() : null;
+    const live = SUPA ? await STORE.eph.list('presence') : null;
     const users = db.users.map(u => {
-      const S = readState(u.id) || {};
-      const workouts = records(S.workouts);
-      const last = workouts[workouts.length - 1];
+      // Serverless: counted in the database, so the list never moves anyone's whole history.
+      let workouts, lastWorkout, S;
+      if (SUPA) {
+        const m = sums.get(u.id) || {};
+        workouts = m.workouts || 0; lastWorkout = m.lastWorkout || null; S = { _ts: m.ts };
+      } else {
+        S = readState(u.id) || {};
+        const list = records(S.workouts);
+        workouts = list.length; lastWorkout = list.length ? list[list.length - 1].d : null;
+      }
       return {
         id: u.id, name: u.name, created: u.created || null,
         disabled: !!u.disabled, admin: isAdmin(u), invitedBy: u.invitedBy || null,
-        workouts: workouts.length,
-        lastWorkout: last ? last.d : null,
+        workouts,
+        lastWorkout,
         lastSync: lastSyncOf(u, S),
         hasPush: db.subs.some(s => s.userId === u.id),
-        live: livePresence(u.id),
+        live: SUPA ? live.get(u.id) || null : livePresence(u.id),
         // The sign-in e-mail is an admin's to see (to hand out a reset code, to tell two
         // profiles apart), and only while the instance takes passwords at all.
         ...(PASSWORD_LOGIN ? { password: hasPassword(u), email: u.email || null } : {})
@@ -2200,7 +2368,7 @@ const routes = {
     const id = new URL(req.url, 'http://x').searchParams.get('id');
     const u = db.users.find(x => x.id === id);
     if (!u) return json(res, 404, { error: 'no such user' });
-    const S = readState(u.id) || {};
+    const S = (await loadState(u.id)) || {};
     json(res, 200, {
       user: {
         id: u.id, name: u.name, created: u.created || null, disabled: !!u.disabled, admin: isAdmin(u), invitedBy: u.invitedBy || null,
@@ -2225,7 +2393,7 @@ const routes = {
     if (!u) return json(res, 404, { error: 'no such user' });
     if (isAdmin(u)) return json(res, 400, { error: 'cannot disable an admin' });
     u.disabled = !!body.disabled;
-    if (u.disabled) presence.delete(u.id);   // drop them off "training now" at once
+    if (u.disabled) presenceDrop(u.id);   // drop them off "training now" at once
     // A device link made before the lock would otherwise still be waiting when it is lifted.
     if (u.disabled) dropDeviceLinks(db, u.id);
     saveDb();
@@ -2251,9 +2419,10 @@ const routes = {
     db.creds = (db.creds || []).filter(c => c.userId !== u.id);
     db.subs = (db.subs || []).filter(x => x.userId !== u.id);
     dropDeviceLinks(db, u.id);
-    presence.delete(u.id);
+    presenceDrop(u.id);
     // The training history and any Coach credential of theirs, both outside db.json.
-    try { fs.unlinkSync(stateFile(u.id)); } catch { /* already gone */ }
+    if (SUPA) { later(() => STORE.deleteState(u.id)); later(() => STORE.timers.cancelUser(u.id)); }
+    else try { fs.unlinkSync(stateFile(u.id)); } catch { /* already gone */ }
     try { coachConfig.clearProfileAuth(u.id); } catch { /* nothing stored */ }
     // Their photos and videos — the one place a profile's folder under uploads/ is removed.
     try { MEDIA.removeUser(u.id); } catch (e) { console.error('media: could not remove uploads of', u.id, e.message); }
@@ -2311,6 +2480,13 @@ const routes = {
     const limit = Math.max(1, Math.min(200, +q.get('limit') || 100));
     const before = +q.get('before') || Infinity;
     const cat = q.get('cat') || '';
+    const meta = { enabled: AUDIT_ON, ip_mode: AUDIT_IP, retention: { max: AUDIT_MAX, days: AUDIT_DAYS }, now: Date.now() };
+    if (SUPA) {
+      const { events, total } = await STORE.audit.page({
+        limit, before, cat, max: AUDIT_MAX, cut: AUDIT_DAYS ? Date.now() - AUDIT_DAYS * 86400000 : 0
+      });
+      return json(res, 200, { events, total, nextBefore: events.length === limit ? events[events.length - 1].id : null, ...meta });
+    }
     let rows = auditKeep(auditLines()).reverse();
     if (cat === 'fail') rows = rows.filter(r => !r.ok);
     else if (cat) rows = rows.filter(r => String(r.ev).startsWith(cat + '.'));
@@ -2330,7 +2506,8 @@ const routes = {
   // ./data/audit.log already is the export, in a format jq reads directly.
   'POST /api/admin/audit/clear': async (req, res) => {
     const admin = requireAdmin(req, res); if (!admin) return;
-    try { fs.unlinkSync(auditFile); } catch { /* nothing logged yet */ }
+    if (SUPA) await STORE.audit.clear();
+    else try { fs.unlinkSync(auditFile); } catch { /* nothing logged yet */ }
     auditCount = 0;
     audit(req, 'admin.audit.clear', { user: admin });
     json(res, 200, { ok: true });
@@ -2340,7 +2517,13 @@ const routes = {
   // Routes live in coach/routes.js and are handed the helpers above rather than importing
   // them: they are closures over db and SECRET, and passing them in keeps that module free of
   // a cycle. Every one of them is inert while the feature is unconfigured.
-  ...coachRoutes({ json, readBody, readSession, requireAdmin }),
+  ...(SUPA ? {} : coachRoutes({ json, readBody, readSession, requireAdmin })),
+
+  /* ---------- serverless timers ---------- */
+  // pg_cron (opengym_kick) calls this when a rest timer is due, and once a minute for the day
+  // reminders and the housekeeping a long-running process did on its own intervals. Vercel Cron
+  // may call the GET instead. Only with CRON_SECRET, compared in constant time.
+  ...(SUPA ? { 'POST /api/cron/tick': cronTick, 'GET /api/cron/tick': cronTick } : {}),
 
   /* ---------- photos & videos ---------- */
   // Absent, not refusing, when MEDIA_UPLOADS=0: a 404 is what a server from before the feature
@@ -2350,8 +2533,8 @@ const routes = {
 
 /* ---------- Coach: boot recovery, notifications, scheduled reviews ---------- */
 // A job that was running when the process died is not coming back; say so rather than leaving
-// a spinner that never resolves.
-coachJobs.recoverOnBoot();
+// a spinner that never resolves. None of it when serverless, where the Coach is off.
+if (!SUPA) coachJobs.recoverOnBoot();
 // A ready proposal is the one Coach event worth a notification. Failures and "nothing to
 // change" stay silent on purpose (FR-38/E4).
 coachJobs.setProposalHook((uid, pending) => {
@@ -2363,8 +2546,10 @@ coachJobs.setProposalHook((uid, pending) => {
     tag: 'coach-proposal', url: '#/coach'
   });
 });
-startCadence({ users: () => db.users, userNow });
-startWarmup();
+if (!SUPA) {
+  startCadence({ users: () => db.users, userNow });
+  startWarmup();
+}
 
 // node's requestTimeout is one number for every route, and it is half an hour (below) for the
 // sake of one: a video uploaded over a slow uplink. Every other request keeps node's old five
@@ -2387,7 +2572,7 @@ function bodyDeadline(req) {
   req.allowSlowBody = clear;
 }
 
-const server = http.createServer(async (req, res) => {
+async function handle(req, res) {
   bodyDeadline(req);
   // Same-origin (the deployed nginx-proxied web app) never triggers CORS, so this only matters
   // for the paired mobile app calling in from its own WebView origin. It carries no cookie
@@ -2450,7 +2635,79 @@ const server = http.createServer(async (req, res) => {
     console.error(key, e);
     if (!res.headersSent) json(res, 500, { error: 'server error' });
   }
-});
+}
+
+/* ---------- serverless: one request at a time per instance, against fresh data ----------
+   A function instance may be handed several requests at once (Vercel's Fluid compute), and other
+   instances change the database meanwhile. So each request here
+     1. waits for the one before it on this instance — `db` is shared module state;
+     2. reloads db.json's rows (and, on a throttled route, the throttle's counts);
+     3. runs the route as on a self-hosted instance, its writes queued by later();
+     4. answers only once every queued write has landed. A write that failed turns the answer into
+        a 500, so a client never keeps a cookie or a challenge the database does not have. */
+let gate = Promise.resolve();
+function serialized(req, res) {
+  const run = gate.then(() => withStore(req, res));
+  gate = run.catch(() => {});
+  return run;
+}
+const LIMITERS = () => [['burst', AUTH_BURST], ['addr', ADDR_FAILS], ['acct', ACCOUNT_FAILS]];
+async function withStore(req, res) {
+  const realHead = res.writeHead.bind(res), realWrite = res.write.bind(res), realEnd = res.end.bind(res);
+  let head = null, ended = null;
+  const chunks = [];
+  res.writeHead = (...a) => { if (!ended) head = a; return res; };
+  // Body bytes wait with the head: node would otherwise put them on the wire before any status line.
+  res.write = (chunk, ...rest) => { if (!ended && chunk != null) chunks.push([chunk, ...rest.filter(x => typeof x === 'string')]); return true; };
+  res.end = (...a) => { if (!ended) ended = a; return res; };
+  Object.defineProperty(res, 'headersSent', { configurable: true, get: () => !!ended });
+  writeErrors = [];
+  let throttle = null;
+  try {
+    const fresh = await STORE.loadDb();
+    for (const k of Object.keys(db)) delete db[k];
+    Object.assign(db, fresh);
+    dbDefaults();
+    let key = '';
+    try { key = req.method + ' ' + new URL(req.url, 'http://x').pathname; } catch { /* handle() refuses it */ }
+    if (key in THROTTLED) {
+      // The counts as the database has them now; what this request adds goes back as deltas, so
+      // instances counting at the same moment add up rather than overwrite (throttleDeltas).
+      throttle = await STORE.throttle.load();
+      // A copy: the limiters change their entries in place, and `throttle` is the before.
+      for (const [k, l] of LIMITERS()) l.load(JSON.parse(JSON.stringify(throttle[k])));
+    }
+    await handle(req, res);
+    if (throttle) {
+      const ops = LIMITERS().flatMap(([k, l]) => throttleDeltas(k, throttle[k], l.dump()));
+      later(() => STORE.throttle.apply(ops));
+    }
+  } catch (e) {
+    writeErrors.push(e);
+  }
+  await writeChain;
+  delete res.headersSent;
+  res.writeHead = realHead; res.write = realWrite; res.end = realEnd;
+  try {
+    if (writeErrors.length || !ended) {
+      // A guarded save that lost its race (an invite or a device link another instance used a
+      // moment ago) is the caller's to retry; anything else is the database failing.
+      const conflict = writeErrors.length && writeErrors.every(isConflict);
+      if (!conflict) console.error('request failed against the database', writeErrors.map(e => e?.message || e));
+      res.writeHead(conflict ? 409 : writeErrors.length ? 500 : 502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify(conflict ? { error: 'conflict — try again', code: 'conflict' } : { error: 'server error' }));
+      return;
+    }
+    if (head) realHead(...head);
+    for (const c of chunks) realWrite(...c);
+    realEnd(...ended);
+  } catch (e) {
+    console.error('could not answer', e);
+    res.destroy();
+  }
+}
+
+const server = http.createServer(SUPA ? serialized : handle);
 // Node's default of 300 s for a whole request would answer 408 to a 40 MB video on a ~1 Mbit/s
 // uplink. Half an hour covers that; a stalled upload is cut much sooner by its own 60 s idle
 // timer in media.js, a client that never finishes its headers still meets headersTimeout, and
