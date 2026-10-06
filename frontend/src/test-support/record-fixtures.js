@@ -1,5 +1,5 @@
-import { afterAll, vi } from 'vitest'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { afterAll, expect, vi } from 'vitest'
+import { writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { RECORDED_MODULES } from './modules.js'
@@ -23,6 +23,7 @@ ShiftedDate.parse = RealDate.parse
 ShiftedDate.UTC = RealDate.UTC
 globalThis.Date = ShiftedDate
 
+const testFile = expect.getState().testPath
 const recorded = {}
 for (const name of RECORDED_MODULES) {
   const records = (recorded[name] = [])
@@ -37,11 +38,7 @@ for (const name of RECORDED_MODULES) {
 }
 
 afterAll(() => {
-  const file = `${randomUUID()}.json`
-  for (const [name, records] of Object.entries(recorded)) {
-    if (!records.length) continue
-    const dir = join(out, name)
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(join(dir, file), JSON.stringify(records))
+  if (Object.values(recorded).some(records => records.length)) {
+    writeFileSync(join(out, `${randomUUID()}.json`), JSON.stringify({ testFile, records: recorded }))
   }
 })

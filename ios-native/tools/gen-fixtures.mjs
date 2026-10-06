@@ -26,25 +26,44 @@ const FORMAT = 'opengym-conformance/1'
 
 const { RECORDED_MODULES } = await import(pathToFileURL(path.join(FRONTEND, 'src/test-support/modules.js')))
 
-const raw = fs.mkdtempSync(path.join(os.tmpdir(), 'opengym-fixtures-'))
-const vitest = spawnSync(path.join(FRONTEND, 'node_modules/.bin/vitest'), ['run', ...process.argv.slice(2)], {
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'opengym-fixtures-'))
+const raw = path.join(tmp, 'records')
+const report = path.join(tmp, 'vitest.json')
+fs.mkdirSync(raw)
+const vitest = spawnSync(path.join(FRONTEND, 'node_modules/.bin/vitest'), ['run', '--reporter=default', '--reporter=json', `--outputFile.json=${report}`, ...process.argv.slice(2)], {
   cwd: FRONTEND,
   stdio: ['ignore', 'inherit', 'inherit'],
   env: { ...process.env, RECORD_FIXTURES: '1', RECORD_FIXTURES_OUT: raw, TZ: 'UTC' },
 })
 if (vitest.error) throw vitest.error
-if (vitest.status !== 0) {
-  console.warn(`gen-fixtures: vitest exited ${vitest.status}; writing fixtures anyway, a failing test's calls still record what the JS returned and a test that stopped early shows as a fixture diff`)
+
+const recordings = fs.readdirSync(raw).map(file => JSON.parse(fs.readFileSync(path.join(raw, file), 'utf8')))
+const recordingFiles = new Set(recordings.map(recording => recording.testFile))
+const failures = fs.existsSync(report) ? failedTests(JSON.parse(fs.readFileSync(report, 'utf8'))) : []
+const blocking = failures.filter(failure => recordingFiles.has(failure.file))
+const unrelated = failures.filter(failure => !recordingFiles.has(failure.file))
+if (unrelated.length) {
+  console.warn(`gen-fixtures: ignoring ${unrelated.length} failing test(s) in files that record no call; a call one of them stopped before shows as fixture drift:\n  ${unrelated.map(describe).join('\n  ')}`)
+}
+if (blocking.length) {
+  console.error(`gen-fixtures: ${blocking.length} failing test(s) in files that record calls to ${RECORDED_MODULES.join(', ')}; a failure stops a test before its later calls are recorded, so no fixture was written:\n  ${blocking.map(describe).join('\n  ')}`)
+  console.error('Reproduce one under the recorder with: cd frontend && RECORD_FIXTURES=1 RECORD_FIXTURES_OUT=$(mktemp -d) TZ=UTC npx vitest run <test file>')
+  process.exit(1)
+}
+if (vitest.status !== 0 && !failures.length) {
+  console.error(`gen-fixtures: vitest exited ${vitest.status} without naming a failing test; see its output above`)
+  process.exit(1)
 }
 
 const problems = []
 fs.mkdirSync(OUT, { recursive: true })
 for (const module of RECORDED_MODULES) {
-  const dir = path.join(raw, module)
-  const files = fs.existsSync(dir) ? fs.readdirSync(dir) : []
   const calls = new Map()
-  for (const file of files) {
-    for (const record of JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'))) {
+  let files = 0
+  for (const recording of recordings) {
+    const records = recording.records[module] ?? []
+    if (records.length) files++
+    for (const record of records) {
       const bad = record.unrepresentable ?? unrepresentableCallback(record.args)
       if (bad) problems.push(`${module}.${record.fn}: ${bad}`)
       else calls.set(JSON.stringify(record), record)
@@ -58,13 +77,25 @@ for (const module of RECORDED_MODULES) {
   if (unrecorded.length) problems.push(`${module}: no recorded call for ${unrecorded.join(', ')}`)
   const head = JSON.stringify({ format: FORMAT, module, exports }).slice(0, -1)
   fs.writeFileSync(path.join(OUT, `${module}.json`), `${head},"calls":[\n${sorted.join(',\n')}\n]}\n`)
-  console.log(`gen-fixtures: ${module} ${sorted.length} calls from ${files.length} test files`)
+  console.log(`gen-fixtures: ${module} ${sorted.length} calls from ${files} test files`)
 }
-fs.rmSync(raw, { recursive: true, force: true })
+fs.rmSync(tmp, { recursive: true, force: true })
 
 if (problems.length) {
   console.error(`gen-fixtures: ${problems.length} call(s) cannot be recorded:\n  ${[...new Set(problems)].join('\n  ')}`)
   process.exit(1)
+}
+
+function failedTests(report) {
+  return report.testResults.flatMap(file => {
+    const failed = file.assertionResults.filter(test => test.status === 'failed')
+    if (failed.length) return failed.map(test => ({ file: file.name, test: test.fullName }))
+    return file.status === 'failed' ? [{ file: file.name, test: `the file failed to run: ${String(file.message).split('\n')[0]}` }] : []
+  })
+}
+
+function describe({ file, test }) {
+  return `${path.relative(REPO, file)} > ${test}`
 }
 
 function unrepresentableCallback(args) {
