@@ -1,0 +1,1 @@
+JSON.parse accepts this; the Swift parser rejects a lone surrogate in an object key by design, since Swift String keys cannot hold one.
