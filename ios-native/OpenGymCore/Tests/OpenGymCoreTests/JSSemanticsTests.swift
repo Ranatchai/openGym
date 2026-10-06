@@ -1,7 +1,6 @@
 import Testing
 import OpenGymCore
 
-/// Expected values are what Node 24 prints for the same expressions.
 @Suite struct JSSemanticsTests {
     @Test(arguments: [
         ("", "0"), (" 12 ", "12"), ("0x1A", "26"), ("-0x1A", "NaN"), ("0b101", "5"), ("1e3", "1000"),

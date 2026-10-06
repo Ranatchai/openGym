@@ -1,7 +1,3 @@
-// Records every call into the allowlisted lib modules while the normal vitest suite runs, so the
-// Swift ports can be checked against what the JS actually returned. vite.config.js loads this file
-// only under RECORD_FIXTURES=1; ios-native/tools/gen-fixtures.mjs drives it and documents the
-// fixture format, including the {"$js": ...} encoding of values JSON cannot hold.
 import { afterAll, vi } from 'vitest'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -62,9 +58,7 @@ function encode(value, seen = new Set()) {
   }
 }
 
-// The recorder must never change what a test sees, so a value it cannot encode becomes an
-// `unrepresentable` record, which gen-fixtures.mjs refuses, instead of an exception.
-function attempt(encodeIt) {
+function encodeOrUnrepresentable(encodeIt) {
   try {
     return { value: encodeIt() }
   } catch (error) {
@@ -75,12 +69,10 @@ function attempt(encodeIt) {
 
 const messageOf = error => String(error?.message ?? error)
 
-// A function argument is recorded as the table of calls it answered during the call, which the
-// Swift side replays. Only top-level arguments can be swapped for a recording wrapper.
 function recordingCallback(fn) {
   const calls = []
   const wrapped = function (...args) {
-    const encodedArgs = attempt(() => encode(args))
+    const encodedArgs = encodeOrUnrepresentable(() => encode(args))
     if (encodedArgs.unrepresentable) {
       calls.push({ unrepresentable: `a callback argument holds ${encodedArgs.unrepresentable}` })
       return fn.apply(this, args)
@@ -92,7 +84,7 @@ function recordingCallback(fn) {
       calls.push({ args: encodedArgs.value, throws: messageOf(error) })
       throw error
     }
-    const encodedResult = attempt(() => encode(result))
+    const encodedResult = encodeOrUnrepresentable(() => encode(result))
     calls.push(encodedResult.unrepresentable
       ? { unrepresentable: `a callback result holds ${encodedResult.unrepresentable}` }
       : { args: encodedArgs.value, result: encodedResult.value })
@@ -104,7 +96,7 @@ function recordingCallback(fn) {
 function wrapExport(name, fn, records) {
   return function (...args) {
     const snapshot = () => JSON.stringify(args.map(arg => (typeof arg === 'function' ? null : encode(arg))))
-    const before = attempt(snapshot)
+    const before = encodeOrUnrepresentable(snapshot)
     if (before.unrepresentable) {
       records.push({ fn: name, unrepresentable: `an argument holds ${before.unrepresentable}` })
       return fn.apply(this, args)
@@ -118,8 +110,8 @@ function wrapExport(name, fn, records) {
       records.push({ fn: name, args: encodedArgs, throws: messageOf(error) })
       throw error
     }
-    const after = attempt(snapshot)
-    const encodedResult = attempt(() => encode(result))
+    const after = encodeOrUnrepresentable(snapshot)
+    const encodedResult = encodeOrUnrepresentable(() => encode(result))
     if (after.value !== before.value) records.push({ fn: name, unrepresentable: 'the call mutated its arguments' })
     else if (encodedResult.unrepresentable) records.push({ fn: name, unrepresentable: `the result holds ${encodedResult.unrepresentable}` })
     else records.push({ fn: name, args: encodedArgs, result: encodedResult.value })

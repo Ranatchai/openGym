@@ -1,6 +1,3 @@
-/// Set-row semantics shared by session, history and strength views, ported from
-/// `frontend/src/lib/workout-model.js`. Rows stay `JSONValue` so every key the web app wrote
-/// survives an edit in its original position; `nil` stands for `undefined`.
 public enum SetPhase: String, Sendable {
     case warmup, work
 }
@@ -29,14 +26,14 @@ public enum Side: String, Sendable, CaseIterable {
     }
 }
 
-/// What a drop's weight snaps to: the nearest 0.5, a positive weight step, or a function that
-/// snaps onto the plates you own.
 public enum DropGrid {
     case halfStep
     case step(Double)
     case snap((Double) -> Double)
 }
 
+/// `frontend/src/lib/workout-model.js`. Rows are `JSONValue`, so every key the web app wrote keeps
+/// its position through an edit, and `nil` is `undefined`.
 public enum WorkoutModel {
     public static let weightOriginManual = "manual"
 
@@ -47,8 +44,6 @@ public enum WorkoutModel {
     static func isNullish(_ value: JSONValue?) -> Bool {
         value == nil || value == .null
     }
-
-    // MARK: Phase and set type
 
     static func normalizedPhase(_ value: JSONValue?, fallback: SetPhase) -> SetPhase {
         switch JS.token(value) {
@@ -94,8 +89,6 @@ public enum WorkoutModel {
         return clusters
     }
 
-    // MARK: Volume
-
     static func dropVolume(_ drops: [JSONValue]) -> Double {
         drops.reduce(0) { v, d in v + JS.number(JS.member(d, "w")) * JS.number(JS.member(d, "r")) }
     }
@@ -126,8 +119,6 @@ public enum WorkoutModel {
         return JS.number(JS.member(set, "w")) * JS.number(JS.member(set, "r")) + extraVolumeOf(set)
     }
 
-    // MARK: Drops and clusters
-
     public static func addDrop(_ set: JSONValue?, _ drop: JSONValue?) -> JSONValue {
         var out = objectOf(set)
         let prev = out["drops"]?.arrayValue ?? []
@@ -152,12 +143,12 @@ public enum WorkoutModel {
 
     public static func removeDropAt(_ set: JSONValue?, _ i: Int) throws(JSTypeError) -> JSONValue {
         let source = objectOf(set)
-        return removing(i, key: "drops", items: try list(source, "drops", calling: "filter"), from: source)
+        return removingRevertingToStraight(i, key: "drops", items: try arrayOrTypeError(source, "drops", calling: "filter"), from: source)
     }
 
     public static func removeClusterAt(_ set: JSONValue?, _ i: Int) throws(JSTypeError) -> JSONValue {
         let source = objectOf(set)
-        return removing(i, key: "clusters", items: try list(source, "clusters", calling: "filter"), from: source)
+        return removingRevertingToStraight(i, key: "clusters", items: try arrayOrTypeError(source, "clusters", calling: "filter"), from: source)
     }
 
     public static func setDropAt(_ set: JSONValue?, _ i: Int, _ patch: JSONValue?) throws(JSTypeError) -> JSONValue? {
@@ -168,8 +159,7 @@ public enum WorkoutModel {
         try patching(set, key: "clusters", at: i) { for (k, v) in JS.spread(patch).ordered { $0[k] = v } }
     }
 
-    /// `(objectOf(set)[key] || [])` as the array the JS then calls `method` on.
-    static func list(_ source: JSONObject, _ key: String, calling method: String) throws(JSTypeError) -> [JSONValue] {
+    static func arrayOrTypeError(_ source: JSONObject, _ key: String, calling method: String) throws(JSTypeError) -> [JSONValue] {
         let value = source[key]
         guard JS.isTruthy(value) else { return [] }
         guard case .array(let items) = value else {
@@ -178,8 +168,7 @@ public enum WorkoutModel {
         return items
     }
 
-    /// Clearing the last item reverts the row to a straight set.
-    static func removing(_ i: Int, key: String, items: [JSONValue], from source: JSONObject) -> JSONValue {
+    static func removingRevertingToStraight(_ i: Int, key: String, items: [JSONValue], from source: JSONObject) -> JSONValue {
         let kept = items.enumerated().filter { $0.offset != i }.map(\.element)
         var out = source
         if kept.isEmpty { out["type"] = .string("straight") }
@@ -187,8 +176,6 @@ public enum WorkoutModel {
         return .object(out)
     }
 
-    /// `items.slice()`, then `{...items[i], ...patch}` in place; the row comes back untouched when
-    /// there is no item at `i`.
     static func patching(_ set: JSONValue?, key: String, at i: Int, _ patch: (inout JSONObject) -> Void) throws(JSTypeError) -> JSONValue? {
         let source = objectOf(set)
         let items: [JSONValue]
@@ -209,7 +196,6 @@ public enum WorkoutModel {
         return patched(source, key: key, items: items, at: i, patch).map { .object($0) } ?? set
     }
 
-    /// Nil when there is no item at `i`.
     static func patched(_ source: JSONObject, key: String, items: [JSONValue], at i: Int, _ patch: (inout JSONObject) -> Void) -> JSONObject? {
         guard i >= 0, i < items.count, JS.isTruthy(items[i]) else { return nil }
         var items = items
@@ -259,12 +245,6 @@ public enum WorkoutModel {
         return bursts
     }
 
-    // MARK: Per-side sets
-    //
-    // A per-side row logs each limb in `sides: {L, R}` and keeps a scalar summary for readers that
-    // predate it: r = L.r + R.r, w = max(L.w, R.w), done = L.done && R.done, and the harder side's
-    // effort. `syncSideAggregate` recomputes that summary after every per-side edit.
-
     public static func isSideSet(_ set: JSONValue?) -> Bool {
         guard case .object(let sides) = objectOf(set)["sides"] else { return false }
         return JS.isTruthy(sides["L"]) && JS.isTruthy(sides["R"])
@@ -297,6 +277,8 @@ public enum WorkoutModel {
         return syncSideAggregate(.object(next))
     }
 
+    /// Recomputes a per-side row's scalar summary from `sides: {L, R}`: r = L.r + R.r,
+    /// w = max(L.w, R.w), done = L.done && R.done, and the harder side's effort.
     public static func syncSideAggregate(_ row: JSONValue?) -> JSONValue {
         let base = objectOf(row)
         guard isSideSet(.object(base)), let sides = base["sides"]?.objectValue else { return .object(base) }
@@ -364,7 +346,6 @@ public enum WorkoutModel {
         return syncSideAggregate(.object(next))
     }
 
-    /// `items[items.length - 1][key]`, which throws on a null last item as JS does.
     static func lastItem(_ items: [JSONValue], _ key: String) throws(JSTypeError) -> JSONValue? {
         if items.last == .null { throw JSTypeError("Cannot read properties of null (reading '\(key)')") }
         return JS.member(items.last, key)
@@ -384,7 +365,7 @@ public enum WorkoutModel {
 
     public static func removeSideDropAt(_ row: JSONValue?, _ i: Int) -> JSONValue {
         patchBothSides(row) { side in
-            removing(i, key: "drops", items: side["drops"]?.arrayValue ?? [], from: side)
+            removingRevertingToStraight(i, key: "drops", items: side["drops"]?.arrayValue ?? [], from: side)
         }
     }
 
@@ -411,7 +392,7 @@ public enum WorkoutModel {
         patchBothSides(row) { side in
             let clusters = clustersOf(.object(side))
             let removed = i >= 0 && i < clusters.count ? JS.member(clusters[i], "r") : nil
-            var out = JS.spread(removing(i, key: "clusters", items: side["clusters"]?.arrayValue ?? [], from: side))
+            var out = JS.spread(removingRevertingToStraight(i, key: "clusters", items: side["clusters"]?.arrayValue ?? [], from: side))
             let r = JS.number(side["r"]) - (JS.isTruthy(removed) ? JS.toNumber(removed) : 0)
             out["r"] = .number(JS.max(0, r))
             return .object(out)
@@ -428,8 +409,6 @@ public enum WorkoutModel {
             return .object(out)
         }
     }
-
-    // MARK: Modes
 
     public static func normalizeMode(_ value: JSONValue?, fallback: SetMode = .reps) -> SetMode {
         SetMode(JS.token(value)) ?? fallback

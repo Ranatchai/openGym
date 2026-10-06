@@ -121,8 +121,8 @@ public enum JS {
     /// `s.trim().toLowerCase()`.
     public static func trimmedLowercase(_ s: String) -> String {
         let scalars = s.unicodeScalars
-        guard let start = scalars.firstIndex(where: { !isWhitespace($0) }),
-              let end = scalars.lastIndex(where: { !isWhitespace($0) }) else { return "" }
+        guard let start = scalars.firstIndex(where: { !isECMAScriptWhitespace($0) }),
+              let end = scalars.lastIndex(where: { !isECMAScriptWhitespace($0) }) else { return "" }
         return String(scalars[start...end]).lowercased()
     }
 
@@ -131,20 +131,17 @@ public enum JS {
         return .utf16String(units)
     }
 
-    /// ECMAScript WhiteSpace and LineTerminator.
-    static func isWhitespace(_ c: Unicode.Scalar) -> Bool {
+    static func isECMAScriptWhitespace(_ c: Unicode.Scalar) -> Bool {
         switch c.value {
         case 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x20, 0xA0, 0x2028, 0x2029, 0xFEFF: true
         default: c.properties.generalCategory == .spaceSeparator
         }
     }
 
-    /// StringToNumber: surrounding whitespace ignored, empty is 0, else a decimal, `Infinity`, or
-    /// an unsigned 0x/0o/0b literal; anything else is NaN.
     static func stringToNumber(_ s: String) -> Double {
         let scalars = s.unicodeScalars
-        guard let start = scalars.firstIndex(where: { !isWhitespace($0) }),
-              let end = scalars.lastIndex(where: { !isWhitespace($0) }) else { return 0 }
+        guard let start = scalars.firstIndex(where: { !isECMAScriptWhitespace($0) }),
+              let end = scalars.lastIndex(where: { !isECMAScriptWhitespace($0) }) else { return 0 }
         let text = String(scalars[start...end])
         let bytes = Array(text.utf8)
         if bytes.count > 2, bytes[0] == UInt8(ascii: "0") {

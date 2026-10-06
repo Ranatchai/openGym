@@ -2,9 +2,6 @@ import Foundation
 import Testing
 import OpenGymCore
 
-/// Calls each Swift port with every argument list the JS recorded under
-/// `Fixtures/conformance` (see ios-native/tools/gen-fixtures.mjs) and requires the serialized
-/// result, or the thrown message, to match the JS byte for byte.
 @Suite struct ConformanceTests {
     @Test func testWorkoutModel() throws {
         try checkConformance(module: "workout-model")
@@ -43,7 +40,7 @@ func checkConformance(module: String) throws {
         let name = record["fn"]?.stringValue ?? "?"
         guard let port = ports[name] else { continue }
         let argsText = JSONSerializer.string(record["args"] ?? .null)
-        let problem = run(port, record)
+        let problem = mismatch(port, record)
         if let problem {
             failed[name, default: 0] += 1
             if failed[name, default: 0] <= reportedPerFunction {
@@ -64,8 +61,7 @@ func checkConformance(module: String) throws {
     #expect(total == calls.count && !calls.isEmpty)
 }
 
-/// Nil when Swift matches JS, else what differed.
-private func run(_ port: Port, _ record: JSONObject) -> String? {
+private func mismatch(_ port: Port, _ record: JSONObject) -> String? {
     let args: Args
     do {
         args = try FixtureValue.args(record["args"] ?? .null)

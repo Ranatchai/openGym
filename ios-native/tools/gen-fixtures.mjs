@@ -1,7 +1,3 @@
-// Records the JS behavior the Swift ports must match. Runs the frontend vitest suite with
-// frontend/src/test-support/record-fixtures.js loaded, then writes one file per recorded module to
-// ios-native/OpenGymCore/Tests/OpenGymCoreTests/Fixtures/conformance/<module>.json.
-//
 // Fixture format, opengym-conformance/1:
 //   {"format":"opengym-conformance/1","module":"rep-range","exports":["normalizeRepRange"],"calls":[
 //   {"fn":"normalizeRepRange","args":[12,8],"result":{"reps":12,"repsMin":8}},
@@ -37,9 +33,9 @@ const vitest = spawnSync(path.join(FRONTEND, 'node_modules/.bin/vitest'), ['run'
   env: { ...process.env, RECORD_FIXTURES: '1', RECORD_FIXTURES_OUT: raw, TZ: 'UTC' },
 })
 if (vitest.error) throw vitest.error
-// A failing test still records what the JS returned for the calls it made, and a test that
-// stops early shows up as a fixture diff, so the suite's own exit code does not gate this.
-if (vitest.status !== 0) console.warn(`gen-fixtures: vitest exited ${vitest.status}; fixtures are still written`)
+if (vitest.status !== 0) {
+  console.warn(`gen-fixtures: vitest exited ${vitest.status}; writing fixtures anyway, a failing test's calls still record what the JS returned and a test that stopped early shows as a fixture diff`)
+}
 
 const problems = []
 fs.mkdirSync(OUT, { recursive: true })

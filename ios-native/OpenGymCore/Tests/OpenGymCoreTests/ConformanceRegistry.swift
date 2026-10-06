@@ -1,11 +1,9 @@
 import OpenGymCore
 
-/// A fixture value the Swift side cannot hold, such as an `undefined` nested inside an object.
-struct Unsupported: Error, CustomStringConvertible {
+struct NotDrivable: Error, CustomStringConvertible {
     let description: String
 }
 
-/// A recorded function argument, replayed: it answers exactly the calls JS made to it.
 final class Replay {
     let calls: [(args: [UInt8], result: JSONValue)]
     private(set) var misses: [String] = []
@@ -22,11 +20,10 @@ final class Replay {
             return .nan
         }
         defer { used += 1 }
-        return JS.toNumber((try? FixtureValue.decodeTop(calls[used].result)) ?? nil)
+        return JS.toNumber((try? FixtureValue.decodeArgOrResult(calls[used].result)) ?? nil)
     }
 }
 
-/// The arguments of one recorded call, decoded from the fixture encoding.
 struct Args {
     let values: [JSONValue?]
     let replays: [Int: Replay]
@@ -37,19 +34,18 @@ struct Args {
 
     func index(_ i: Int) throws -> Int {
         guard case .number(let n) = self[i], n == n.rounded(), let int = Int(exactly: n) else {
-            throw Unsupported(description: "argument \(i) is not an integer index: \(FixtureValue.text(self[i]))")
+            throw NotDrivable(description: "argument \(i) is not an integer index: \(FixtureValue.text(self[i]))")
         }
         return int
     }
 
     func string(_ i: Int) throws -> String {
-        guard case .string(let s) = self[i] else { throw Unsupported(description: "argument \(i) is not a string") }
+        guard case .string(let s) = self[i] else { throw NotDrivable(description: "argument \(i) is not a string") }
         return s
     }
 
     func side(_ i: Int) -> Side? { Side(self[i]) }
 
-    /// `grid` as nextDropWeight reads it: a function snaps, a positive number steps.
     func grid(_ i: Int) -> DropGrid {
         if let replay = replays[i] { return .snap(replay.call) }
         let step = number(i)
@@ -68,8 +64,6 @@ struct Args {
 
 typealias Port = @Sendable (Args) throws -> JSONValue?
 
-/// Every ported lib function by module and JS export name. ConformanceTests fails on a recorded
-/// export with no entry here, and on an entry no fixture exercises.
 enum ConformanceRegistry {
     static let modules: [String: [String: Port]] = [
         "rep-range": [
@@ -116,15 +110,13 @@ enum ConformanceRegistry {
     ]
 }
 
-/// The `{"$js": ...}` encoding gen-fixtures.mjs documents, in both directions.
 enum FixtureValue {
     static func tag(_ value: JSONValue) -> String? {
         guard case .object(let o) = value, o.count >= 1, case .string(let tag) = o["$js"] else { return nil }
         return tag
     }
 
-    /// A top-level argument or result: `undefined` is nil.
-    static func decodeTop(_ value: JSONValue) throws -> JSONValue? {
+    static func decodeArgOrResult(_ value: JSONValue) throws -> JSONValue? {
         tag(value) == "undefined" ? nil : try decode(value)
     }
 
@@ -134,8 +126,8 @@ enum FixtureValue {
         case "Infinity": return .number(.infinity)
         case "-Infinity": return .number(-.infinity)
         case "-0": return .number(-0.0)
-        case "undefined": throw Unsupported(description: "an undefined nested in an argument has no JSONValue form")
-        case let tag?: throw Unsupported(description: "a nested {\"$js\":\"\(tag)\"} value")
+        case "undefined": throw NotDrivable(description: "an undefined nested in an argument has no JSONValue form")
+        case let tag?: throw NotDrivable(description: "a nested {\"$js\":\"\(tag)\"} value")
         case nil: break
         }
         switch value {
@@ -163,21 +155,21 @@ enum FixtureValue {
     }
 
     static func args(_ value: JSONValue) throws -> Args {
-        guard case .array(let items) = value else { throw Unsupported(description: "args is not an array") }
+        guard case .array(let items) = value else { throw NotDrivable(description: "args is not an array") }
         var values: [JSONValue?] = []
         var replays: [Int: Replay] = [:]
         for (i, item) in items.enumerated() {
             if tag(item) == "function" {
-                guard case .array(let calls)? = item.objectValue?["calls"] else { throw Unsupported(description: "a function argument without calls") }
+                guard case .array(let calls)? = item.objectValue?["calls"] else { throw NotDrivable(description: "a function argument without calls") }
                 replays[i] = Replay(try calls.map { call in
                     guard let args = call.objectValue?["args"], let result = call.objectValue?["result"] else {
-                        throw Unsupported(description: "a callback call that threw")
+                        throw NotDrivable(description: "a callback call that threw")
                     }
                     return (JSONSerializer.serialize(args), result)
                 })
                 values.append(nil)
             } else {
-                values.append(try decodeTop(item))
+                values.append(try decodeArgOrResult(item))
             }
         }
         return Args(values: values, replays: replays)
