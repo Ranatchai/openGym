@@ -3,6 +3,7 @@ set -eu
 cd "$(dirname "$0")/../.."
 probe=ios-native/OpenGymCore/Tests/OpenGymCoreTests/Fixtures/untracked-probe.json
 trap 'rm -f "$probe"' EXIT
+export CHECK_CORPUS_SKIP_GENERATE=1
 sh ios-native/tools/check-corpus.sh >/dev/null
 echo '{}' > "$probe"
 if sh ios-native/tools/check-corpus.sh >/dev/null 2>&1; then

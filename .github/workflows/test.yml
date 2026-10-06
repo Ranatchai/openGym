@@ -191,6 +191,6 @@ jobs:
       - name: generated fixtures are committed and current
         run: sh ios-native/tools/check-corpus.sh
       - run: sh ios-native/tools/check-corpus.test.sh
-      - run: node --test ios-native/tools/gen-json-corpus.test.mjs
+      - run: node --test ios-native/tools/gen-json-corpus.test.mjs ios-native/tools/gen-fixtures.test.mjs ios-native/tools/recorder.test.mjs
       - run: swift test
         working-directory: ios-native/OpenGymCore
