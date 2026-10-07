@@ -17,6 +17,7 @@ struct OpenGymApp: App {
                 .environment(\.language, language)
                 .environment(\.locale, language.locale)
                 .environment(\.layoutDirection, language.layoutDirection)
+                .onAppear { DispatchQueue.main.async(execute: LaunchTiming.firstFrame) }
         }
     }
 }
