@@ -4,8 +4,10 @@ cd "$(dirname "$0")/../.."
 fixtures=ios-native/OpenGymCore/Tests/OpenGymCoreTests/Fixtures
 resources=ios-native/OpenGymApp/Resources
 if [ -z "${CHECK_CORPUS_SKIP_GENERATE:-}" ]; then
-  node ios-native/tools/gen-json-corpus.mjs
-  node ios-native/tools/gen-fixtures.mjs
+  if [ -z "${CHECK_CORPUS_SKIP_RECORDER:-}" ]; then
+    node ios-native/tools/gen-json-corpus.mjs
+    node ios-native/tools/gen-fixtures.mjs
+  fi
   node ios-native/tools/export-exercises.mjs
   node ios-native/tools/convert-locales.mjs
 fi
