@@ -58,11 +58,26 @@ function installDom() {
 }
 
 const chip = re => [...container.querySelectorAll('.qchip')].find(b => re.test(b.textContent || ''))
+// A click is over once the request was taken (the user's line is in the thread) or refused (a
+// toast). The first one also loads coach-demo.js through its dynamic import, which vitest serves
+// over real I/O, so the wait is in real event-loop turns for the effect, not in microtasks.
 async function click(el) {
   expect(el).toBeTruthy()
-  await act(async () => { el.dispatchEvent(new dom.Event('click', { bubbles: true })); await flush() })
+  const lines = mocks.S.coach.chat.length
+  await act(async () => {
+    el.dispatchEvent(new dom.Event('click', { bubbles: true }))
+    await until(() => mocks.S.coach.chat.length > lines || mocks.toast.mock.calls.length > 0)
+    await flush()
+  })
 }
-// Microtasks only: the dynamic import of coach-demo.js and the status refresh both settle here.
+const until = async cond => {
+  const t0 = performance.now()
+  while (!cond()) {
+    if (performance.now() - t0 > 2000) throw new Error('the Coach never answered the request')
+    await new Promise(r => setImmediate(r))
+  }
+}
+// Microtasks only: with coach-demo.js loaded, its calls and the status refresh settle here.
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve() }
 const settle = async () => { await act(async () => { await flush() }) }
 const elapse = async ms => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); await flush() }) }
