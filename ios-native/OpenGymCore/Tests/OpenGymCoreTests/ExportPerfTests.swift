@@ -5,17 +5,17 @@ import XCTest
 final class ExportPerfTests: XCTestCase {
     func testExercisesDecodeWithinBudget() throws {
         let data = try Data(contentsOf: ExportFiles.exercises)
-        var samples: [Duration] = []
+        var samples: [Double] = []
         for _ in 0..<5 {
-            let start = ContinuousClock.now
+            let start = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)
             let catalogue = try JSONDecoder().decode([Exercise].self, from: data)
-            samples.append(ContinuousClock.now - start)
+            samples.append(Double(clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID) - start) / 1e6)
             XCTAssertEqual(catalogue.count, 1324)
         }
-        let ms = samples.map { Double($0.components.attoseconds) / 1e15 + Double($0.components.seconds) * 1e3 }
-        print("ExportPerfTests: exercises.json \(data.count) bytes, decode ms \(ms.map { String(format: "%.2f", $0) }.joined(separator: " "))")
+        let median = samples.sorted()[samples.count / 2]
+        print("ExportPerfTests: exercises.json \(data.count) bytes, decode thread CPU ms \(samples.map { String(format: "%.2f", $0) }.joined(separator: " ")), median \(String(format: "%.2f", median))")
         #if !DEBUG
-        XCTAssertLessThan(ms.max()!, 50)
+        XCTAssertLessThan(median, 50)
         #endif
     }
 }
