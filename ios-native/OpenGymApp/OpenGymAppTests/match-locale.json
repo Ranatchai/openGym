@@ -1,0 +1,202 @@
+[
+  {
+    "tag": "en",
+    "match": "en"
+  },
+  {
+    "tag": "en-US",
+    "match": "en"
+  },
+  {
+    "tag": "en-GB",
+    "match": "en"
+  },
+  {
+    "tag": "EN_us",
+    "match": "en"
+  },
+  {
+    "tag": " en ",
+    "match": "en"
+  },
+  {
+    "tag": "",
+    "match": null
+  },
+  {
+    "tag": "   ",
+    "match": null
+  },
+  {
+    "tag": "de",
+    "match": "de"
+  },
+  {
+    "tag": "de-AT",
+    "match": "de"
+  },
+  {
+    "tag": "de-CH",
+    "match": "de-CH"
+  },
+  {
+    "tag": "de_ch",
+    "match": "de-CH"
+  },
+  {
+    "tag": "DE-CH",
+    "match": "de-CH"
+  },
+  {
+    "tag": "pt",
+    "match": "pt"
+  },
+  {
+    "tag": "pt-PT",
+    "match": "pt"
+  },
+  {
+    "tag": "pt-BR",
+    "match": "pt-BR"
+  },
+  {
+    "tag": "pt_BR",
+    "match": "pt-BR"
+  },
+  {
+    "tag": "pt-br",
+    "match": "pt-BR"
+  },
+  {
+    "tag": "PT-BR",
+    "match": "pt-BR"
+  },
+  {
+    "tag": "zh",
+    "match": "zh"
+  },
+  {
+    "tag": "zh-Hans",
+    "match": "zh"
+  },
+  {
+    "tag": "zh-Hans-CN",
+    "match": "zh"
+  },
+  {
+    "tag": "zh-Hant",
+    "match": "zh"
+  },
+  {
+    "tag": "zh-Hant-TW",
+    "match": "zh"
+  },
+  {
+    "tag": "zh-TW",
+    "match": "zh"
+  },
+  {
+    "tag": "zh-HK",
+    "match": "zh"
+  },
+  {
+    "tag": "zh_Hant_HK",
+    "match": "zh"
+  },
+  {
+    "tag": "yue-Hant-HK",
+    "match": null
+  },
+  {
+    "tag": "th",
+    "match": "th"
+  },
+  {
+    "tag": "th-TH",
+    "match": "th"
+  },
+  {
+    "tag": "ar",
+    "match": "ar"
+  },
+  {
+    "tag": "ar-SA",
+    "match": "ar"
+  },
+  {
+    "tag": "ar-EG",
+    "match": "ar"
+  },
+  {
+    "tag": "ko-KR",
+    "match": "ko"
+  },
+  {
+    "tag": "hi-IN",
+    "match": "hi"
+  },
+  {
+    "tag": "uk-UA",
+    "match": "uk"
+  },
+  {
+    "tag": "ru-RU",
+    "match": "ru"
+  },
+  {
+    "tag": "tr-TR",
+    "match": "tr"
+  },
+  {
+    "tag": "pl-PL",
+    "match": "pl"
+  },
+  {
+    "tag": "hu-HU",
+    "match": "hu"
+  },
+  {
+    "tag": "it-IT",
+    "match": "it"
+  },
+  {
+    "tag": "es-419",
+    "match": "es"
+  },
+  {
+    "tag": "es-MX",
+    "match": "es"
+  },
+  {
+    "tag": "fr-CA",
+    "match": "fr"
+  },
+  {
+    "tag": "ja",
+    "match": null
+  },
+  {
+    "tag": "ja-JP",
+    "match": null
+  },
+  {
+    "tag": "nl-NL",
+    "match": null
+  },
+  {
+    "tag": "sr-Latn-RS",
+    "match": null
+  },
+  {
+    "tag": "-de",
+    "match": null
+  },
+  {
+    "tag": "de-",
+    "match": "de"
+  },
+  {
+    "tag": "x-klingon",
+    "match": null
+  }
+]
