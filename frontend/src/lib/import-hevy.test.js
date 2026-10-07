@@ -144,10 +144,12 @@ describe('parseHevyWorkouts', () => {
 
   it('merges two Hevy sessions on the same local day', () => {
     const a = { ...WORKOUT, id: 'a', title: 'AM', exercises: [WORKOUT.exercises[0]] }
+    // 18:00 on a's local day, so the two share a day in whatever zone the test runs in.
+    const day = localWhen(WORKOUT.start_time).d
     const b = {
       ...WORKOUT, id: 'b', title: 'PM',
-      start_time: '2026-08-25T18:00:00+00:00',
-      end_time: '2026-08-25T19:00:00+00:00',
+      start_time: new Date(`${day}T18:00:00`).toISOString(),
+      end_time: new Date(`${day}T19:00:00`).toISOString(),
       exercises: [WORKOUT.exercises[1]],
     }
     const parsed = parseHevyWorkouts([a, b], TEMPLATES, { unit: 'kg' })
